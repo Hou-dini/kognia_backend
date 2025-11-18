@@ -8,6 +8,9 @@ from pydantic import BaseModel, Field
 from contextlib import asynccontextmanager
 
 
+  # Load environment variables from a .env file if present
+
+
 # --- Configuration ---
 # CRITICAL: Get your Supabase Postgres connection string
 # Go to Supabase -> Project Settings -> Database -> Connection string -> URI
@@ -15,7 +18,6 @@ from contextlib import asynccontextmanager
 # Make sure to replace [YOUR-PASSWORD]
 # Example: "postgres://postgres:[YOUR-PASSWORD]@db.xxxxxx.supabase.co:5432/postgres"
 
-DATABASE_URL = " "
 
 # This will hold our database connection pool
 db_pool = None
