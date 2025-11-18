@@ -6,7 +6,7 @@ from fastapi import FastAPI, HTTPException, Body, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from contextlib import asynccontextmanager
-from app_config import DATABASE_URL
+
 
 # --- Configuration ---
 # CRITICAL: Get your Supabase Postgres connection string
@@ -15,7 +15,7 @@ from app_config import DATABASE_URL
 # Make sure to replace [YOUR-PASSWORD]
 # Example: "postgres://postgres:[YOUR-PASSWORD]@db.xxxxxx.supabase.co:5432/postgres"
 
-DATABASE_URL = DATABASE_URL 
+DATABASE_URL = "postgresql+asyncpg://user:password@localhost:5432/brandspark_db"
 
 # This will hold our database connection pool
 db_pool = None
@@ -248,5 +248,5 @@ if __name__ == "__main__":
     # Note: Uvicorn's 'reload=True' is great for dev but can be tricky
     # with lifespan events. For production, run with gunicorn or similar.
     print("Starting Uvicorn server in reload mode...")
-    print(DATABASE_URL)
-    # uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
