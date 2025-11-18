@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 # Make sure to replace [YOUR-PASSWORD]
 # Example: "postgres://postgres:[YOUR-PASSWORD]@db.xxxxxx.supabase.co:5432/postgres"
 
-DATABASE_URL = "postgresql+asyncpg://user:password@localhost:5432/brandspark_db"
+DATABASE_URL = " "
 
 # This will hold our database connection pool
 db_pool = None
