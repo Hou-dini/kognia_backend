@@ -6,9 +6,7 @@ from fastapi import FastAPI, HTTPException, Body, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from contextlib import asynccontextmanager
-
-
-  # Load environment variables from a .env file if present
+import os
 
 
 # --- Configuration ---
@@ -18,6 +16,7 @@ from contextlib import asynccontextmanager
 # Make sure to replace [YOUR-PASSWORD]
 # Example: "postgres://postgres:[YOUR-PASSWORD]@db.xxxxxx.supabase.co:5432/postgres"
 
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
 # This will hold our database connection pool
 db_pool = None
