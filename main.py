@@ -11,7 +11,9 @@ from contextlib import asynccontextmanager
 from google.genai import types
 from google.adk.runners import Runner
 from google.adk.memory import InMemoryMemoryService
-from google.adk.sessions import InMemorySessionService
+from google.adk.sessions import DatabaseSessionService
+from google.adk.apps.app import App, EventsCompactionConfig
+from google.adk.plugins.logging_plugin import LoggingPlugin
 
 from tools.agent import root_agent
 
@@ -61,13 +63,23 @@ async def lifespan(app: FastAPI):
 
     print("Initializing ADK Agent Runner and Services...")
     try:
+        db_url = "sqlite:///brandspark.db"
         memory_service = InMemoryMemoryService()
-        session_service = InMemorySessionService()
+        session_service = DatabaseSessionService(db_url=db_url)
+        app_with_compaction = App(
+            name="agents",
+            root_agent=root_agent,
+            events_compaction_config=EventsCompactionConfig(
+                compaction_interval=5,
+                overlap_size=2,
+            )
+        )
         runner_instance = Runner(
-            app_name="agents",
+            app=app_with_compaction,
             agent=root_agent,
             memory_service=memory_service,
             session_service=session_service,
+            plugins=[LoggingPlugin()],
         )
         print("ADK Agent Runner initialized.")
         # Attach the runner to the app state for access in endpoints
