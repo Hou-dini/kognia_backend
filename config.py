@@ -1,4 +1,5 @@
 from google.genai import types
+from google.adk.models.google_llm import Gemini
 
 # Define retry configuration
 retry_config = types.HttpRetryOptions(
@@ -7,6 +8,13 @@ retry_config = types.HttpRetryOptions(
     initial_delay=1,
     http_status_codes=[429, 500, 502, 503, 504],
 )
+
+
+model = Gemini(
+    model="gemini-2.5-flash",
+    retry_options=retry_config
+)
+
 
 # You can also keep your model definition here if you prefer Python-based model instantiation,
 # but it's often simpler to define the model directly in the YAML for LlmAgent.

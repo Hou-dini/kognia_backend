@@ -15,7 +15,7 @@ from google.adk.sessions import DatabaseSessionService
 from google.adk.apps.app import App, EventsCompactionConfig
 from google.adk.plugins.logging_plugin import LoggingPlugin
 
-from tools.agent import root_agent
+from agents.agent import root_agent
 
 
 
