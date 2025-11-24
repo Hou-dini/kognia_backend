@@ -1,6 +1,6 @@
-# 🚀 BrandSpark Backend
+# 🚀 Flux Backend
 
-A FastAPI-based backend service for BrandSpark, built with async PostgreSQL support and Pydantic v1 for data validation.
+A FastAPI-based backend service for Flux, built with async PostgreSQL support and Pydantic v1 for data validation.
 
 ---
 
@@ -19,8 +19,8 @@ A FastAPI-based backend service for BrandSpark, built with async PostgreSQL supp
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-username/brandspark-backend.git
-cd brandspark-backend
+git clone https://github.com/Hou-dini/flux_backend
+cd flux_backend
 
 python -m venv .venv
 # On Windows
