@@ -6,12 +6,6 @@ from agents.report_generator_agent import report_generator_agent
 
 
 analysis_orchestrator = SequentialAgent(
-    name="analysis_orchestrator",
-    description="Orchestrates the sequential workflow for brand and competitor"
-    " analysis, including research, SWOT analysis, and report generation.",
-    sub_agents=[
-        research_agent,
-        swot_analyzer_agent,
-        report_generator_agent,
-    ],
+    name="research_orchestrator",
+    description="Orchestrates market research and competitor analysis workflows.",
 )
