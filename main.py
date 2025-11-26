@@ -26,11 +26,9 @@ from agents.agent import root_agent
 # Make sure to replace [YOUR-PASSWORD]
 # Example: "postgres://postgres:[YOUR-PASSWORD]@db.xxxxxx.supabase.co:5432/postgres"
 
-#DATABASE_URL = os.environ.get("DATABASE_URL")
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
-DATABASE_URL = "postgresql://postgres.nmqruitpbhkjcuucqkgn:BrandSpart2025@aws-1-eu-north-1.pooler.supabase.com:5432/postgres"
-os.environ["GOOGLE_API_KEY"] = "AIzaSyCTO8tSmOYWyhzYfhjKZtjbI7IfKLbvJ2c"
-os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "false"
+
 
 
 # This will hold our database connection pool
