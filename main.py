@@ -26,7 +26,11 @@ from agents.agent import root_agent
 # Make sure to replace [YOUR-PASSWORD]
 # Example: "postgres://postgres:[YOUR-PASSWORD]@db.xxxxxx.supabase.co:5432/postgres"
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
+#DATABASE_URL = os.environ.get("DATABASE_URL")
+
+DATABASE_URL = "postgresql://postgres.nmqruitpbhkjcuucqkgn:BrandSpart2025@aws-1-eu-north-1.pooler.supabase.com:5432/postgres"
+os.environ["GOOGLE_API_KEY"] = "AIzaSyCTO8tSmOYWyhzYfhjKZtjbI7IfKLbvJ2c"
+os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "false"
 
 
 # This will hold our database connection pool
@@ -63,7 +67,17 @@ async def lifespan(app: FastAPI):
 
     print("Initializing ADK Agent Runner and Services...")
     try:
-        adk_db_url = DATABASE_URL
+        base_db_url = DATABASE_URL
+
+        # Transform the URL for SQLAlchemy to explicitly use the psycopg driver
+        # This replaces 'postgresql://' with 'postgresql+psycopg://'
+        if base_db_url.startswith("postgresql://"):
+            adk_db_url = "postgresql+psycopg://" + base_db_url[len("postgresql://"):]
+        else:
+            # Fallback, though unlikely for Supabase.
+            print(f"WARNING: Unexpected DATABASE_URL format: {base_db_url}. Using as is.")
+            adk_db_url = base_db_url
+
         memory_service = InMemoryMemoryService()
         session_service = DatabaseSessionService(db_url=adk_db_url)
         app_with_compaction = App(
@@ -72,14 +86,13 @@ async def lifespan(app: FastAPI):
             events_compaction_config=EventsCompactionConfig(
                 compaction_interval=5,
                 overlap_size=2,
-            )
+            ),
+            plugins=[LoggingPlugin()]
         )
         runner_instance = Runner(
             app=app_with_compaction,
-            agent=root_agent,
             memory_service=memory_service,
-            session_service=session_service,
-            plugins=[LoggingPlugin()],
+            session_service=session_service
         )
         print("ADK Agent Runner initialized.")
         # Attach the runner to the app state for access in endpoints
