@@ -63,9 +63,9 @@ async def lifespan(app: FastAPI):
 
     print("Initializing ADK Agent Runner and Services...")
     try:
-        db_url = "sqlite:///flux.db"
+        adk_db_url = DATABASE_URL
         memory_service = InMemoryMemoryService()
-        session_service = DatabaseSessionService(db_url=db_url)
+        session_service = DatabaseSessionService(db_url=adk_db_url)
         app_with_compaction = App(
             name="agents",
             root_agent=root_agent,
@@ -101,7 +101,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Flux API (Unified)",
     description="API to manage agentic brand and competitor analysis jobs. Runs agents as background tasks.",
-    version="0.2.0",
+    version="0.5.0",
     lifespan=lifespan # Use our startup/shutdown manager
 )
 
