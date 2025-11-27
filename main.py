@@ -70,14 +70,22 @@ async def lifespan(app: FastAPI):
         # Transform the URL for SQLAlchemy to explicitly use the psycopg driver
         # This replaces 'postgresql://' with 'postgresql+psycopg://'
         if base_db_url.startswith("postgresql://"):
-            adk_db_url = "postgresql+psycopg://" + base_db_url[len("postgresql://"):]
+            adk_db_url_base = "postgresql+psycopg://" + base_db_url[len("postgresql://"):]
         else:
             # Fallback, though unlikely for Supabase.
             print(f"WARNING: Unexpected DATABASE_URL format: {base_db_url}. Using as is.")
-            adk_db_url = base_db_url
+            adk_db_url_base = base_db_url
+
+        # Create a new schema for adk in Supabase to avoid clashes with app's sessions table
+        # Append the schema to the ADK's database URL
+        # This tells SQLAlchemy to create/look for ADK's tables in 'adk_schema'
+        # rather than the default 'public' schema.
+        adk_db_url_with_schema = f"{adk_db_url_base}?options=-csearch_path%3Dadk_schema"
+        
 
         memory_service = InMemoryMemoryService()
-        session_service = DatabaseSessionService(db_url=adk_db_url)
+        # Initialize DatabaseSessionService with the transformed URL including schema
+        session_service = DatabaseSessionService(db_url=adk_db_url_with_schema)
         app_with_compaction = App(
             name="agents",
             root_agent=root_agent,
