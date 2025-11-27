@@ -2,11 +2,17 @@ import uvicorn
 import asyncpg
 import uuid
 import os
+import json # Added for JWT parsing
 
-from fastapi import FastAPI, HTTPException, Body, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Body, BackgroundTasks, Depends, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials # Added for auth
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from contextlib import asynccontextmanager
+
+# For JWT verification
+from jose import jwt, jwk # Added for JWT
+from jose.utils import base64url_decode # Added for JWT
 
 from google.genai import types
 from google.adk.runners import Runner
@@ -17,25 +23,23 @@ from google.adk.plugins.logging_plugin import LoggingPlugin
 
 from agents.agent import root_agent
 
-
-
 # --- Configuration ---
-# CRITICAL: Get your Supabase Postgres connection string
-# Go to Supabase -> Project Settings -> Database -> Connection string -> URI
-# Paste it into an environment variable or right here (for dev).
-# Make sure to replace [YOUR-PASSWORD]
-# Example: "postgres://postgres:[YOUR-PASSWORD]@db.xxxxxx.supabase.co:5432/postgres"
+DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://postgres.nmqruitpbhkjcuucqkgn:BrandSpart2025@aws-1-eu-north-1.pooler.supabase.com:5432/postgres")
+# --- NEW: Supabase JWT Secret ---
+SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET","o/rAeML82YdqtjbstQR/Ir/O0EGvgwKD5USFWm/gE7DoDOeRUtFic/tBPZRy2xbVxWYHVrsWIuKTaV02m1me0w==")
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
-
-
+if not DATABASE_URL:
+    print("FATAL: DATABASE_URL environment variable not set.")
+    exit(1)
+if not SUPABASE_JWT_SECRET:
+    print("FATAL: SUPABASE_JWT_SECRET environment variable not set.")
+    exit(1)
 
 
 # This will hold our database connection pool
 db_pool = None
 
 # --- Lifespan Management ---
-# This function runs on app startup and shutdown
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # --- Startup ---
@@ -43,14 +47,12 @@ async def lifespan(app: FastAPI):
     print("Connecting to Supabase (Postgres)...")
     try:
         global db_pool
-        # Create a connection pool
         db_pool = await asyncpg.create_pool(
             DATABASE_URL,
             min_size=1,
             max_size=10
         )
-        # Test the connection
-        async with db_pool.acquire() as connection: # type: ignore
+        async with db_pool.acquire() as connection:
             test_query = await connection.fetchval("SELECT 1")
             if test_query == 1:
                 print("Supabase connection successful!")
@@ -59,32 +61,21 @@ async def lifespan(app: FastAPI):
         print("Database pool created.")
     except Exception as e:
         print(f"FATAL: Could not connect to database: {e}")
-        # In a real app, you might want to prevent startup
-        # For our sprint, we log and continue, but it will fail on requests.
-        db_pool = None # Ensure it's None if setup failed
+        db_pool = None
 
     print("Initializing ADK Agent Runner and Services...")
     try:
         base_db_url = DATABASE_URL
-
-        # Transform the URL for SQLAlchemy to explicitly use the psycopg driver
-        # This replaces 'postgresql://' with 'postgresql+psycopg://'
         if base_db_url.startswith("postgresql://"):
             adk_db_url_base = "postgresql+psycopg://" + base_db_url[len("postgresql://"):]
         else:
-            # Fallback, though unlikely for Supabase.
             print(f"WARNING: Unexpected DATABASE_URL format: {base_db_url}. Using as is.")
             adk_db_url_base = base_db_url
 
-        # Create a new schema for adk in Supabase to avoid clashes with app's sessions table
-        # Append the schema to the ADK's database URL
-        # This tells SQLAlchemy to create/look for ADK's tables in 'adk_schema'
-        # rather than the default 'public' schema.
+        # Using a separate schema for ADK tables to avoid clashes
         adk_db_url_with_schema = f"{adk_db_url_base}?options=-csearch_path%3Dadk_schema"
         
-
         memory_service = InMemoryMemoryService()
-        # Initialize DatabaseSessionService with the transformed URL including schema
         session_service = DatabaseSessionService(db_url=adk_db_url_with_schema)
         app_with_compaction = App(
             name="agents",
@@ -101,13 +92,12 @@ async def lifespan(app: FastAPI):
             session_service=session_service
         )
         print("ADK Agent Runner initialized.")
-        # Attach the runner to the app state for access in endpoints
         app.state.runner = runner_instance
     except Exception as e:
         print(f"FATAL: Could not initialize ADK Agent Runner: {e}")
         app.state.runner = None
 
-    yield # This is where the app runs
+    yield
 
     # --- Shutdown ---
     print("FastAPI app shutting down...")
@@ -116,28 +106,71 @@ async def lifespan(app: FastAPI):
         print("Database pool closed.")
 
 # --- FastAPI App Initialization ---
-
 app = FastAPI(
     title="Flux API (Unified)",
     description="API to manage agentic brand and competitor analysis jobs. Runs agents as background tasks.",
     version="0.5.0",
-    lifespan=lifespan # Use our startup/shutdown manager
+    lifespan=lifespan
 )
 
 # --- CORS ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Allow all for our sprint
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# --- NEW: Supabase JWT Authentication Dependency ---
+security = HTTPBearer()
+
+async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(security)) -> uuid.UUID:
+    """
+    Decodes and verifies the Supabase JWT from the Authorization header
+    and returns the user_id (UUID).
+    """
+    token = credentials.credentials # This is the JWT string
+    
+    try:
+        # Supabase JWTs are generally HS256 signed with the project's JWT secret
+        payload = jwt.decode(token, SUPABASE_JWT_SECRET, algorithms=["HS256"])
+        user_id = payload.get("sub") # 'sub' claim is the user ID in Supabase JWTs
+
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Could not validate credentials: Missing user ID in token.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        # Ensure the user_id is a valid UUID
+        return uuid.UUID(user_id)
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except jwt.JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials: Invalid token signature or format.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except ValueError: # If user_id is not a valid UUID string
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials: Invalid user ID format in token.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
 # --- Pydantic Models ---
 class JobRequest(BaseModel):
     prompt: str = Field(..., min_length=10, description="The user's prompt for analysis.")
     session_id: str = Field(..., description="UUID generated by the frontend for this chat session.")
-    auth_token: str = Field(..., description="Authentication token for user verification.")
+    # Removed auth_token from here, it will come via header
 
 class JobStatus(BaseModel):
     job_id: str
@@ -151,69 +184,63 @@ class ReportResponse(BaseModel):
 class SessionSummary(BaseModel):
     id: str
     title: str
-    updated_at: str # Use string for datetime in response for simplicity
+    updated_at: str
 
 class MessageResponseItem(BaseModel):
     role: str
     content: str
-    timestamp: str # Use string for datetime
+    created_at: str # Renamed timestamp to created_at
+
 
 # --- Agent Logic (To be run in background) ---
 
-async def run_agent_task(job_id: str, prompt: str, user_id: str, session_id: str):
+async def run_agent_task(job_id: str, prompt: str, user_id: uuid.UUID, session_id: str):
     """
     Runs the agent for a given job in the background.
     Updates the job status and stores the report in the database.
     """
     print(f"[Job {job_id}]: Starting background agent task...")
 
-    # 1. Retrieve the runner from the global app state
-   
     runner = app.state.runner
-
     if not runner:
         print(f"[Job {job_id}]: FATAL- Runner not initialized.")
-
         await update_job_status(job_id, "error")
         return
     
     try:
-        # 2. Update job status to 'running'
         await update_job_status(job_id, "running")
 
-        print(f"[Job {job_id}]: Creating session: {session_id} for user: {user_id}...")
+        print(f"[Job {job_id}]: Creating ADK session: {session_id} for user: {user_id}...")
         try:
-            await runner.session_service.create_session(app_name="agents", user_id=user_id, session_id=session_id)
-            print(f"[Job {job_id}]: Session created successfully.")
+            # ADK's session service has its own session management.
+            # Make sure this `user_id` is passed correctly to ADK's `create_session`
+            await runner.session_service.create_session(app_name="agents", user_id=str(user_id), session_id=session_id)
+            print(f"[Job {job_id}]: ADK Session created successfully.")
         except Exception as e:
-            pass
+            # This might happen if ADK session already exists, which is fine.
+            print(f"[Job {job_id}]: ADK Session creation warning (might already exist): {e}")
 
 
         # Log user's message to the DB
-        async with db_pool.acquire() as conn: # type: ignore
+        async with db_pool.acquire() as conn:
+            # --- MODIFIED: Added user_id to INSERT ---
             await conn.execute(
-                "INSERT INTO messages (session_id, role, content) VALUES($1, $2, $3)", 
-                session_id, "user", prompt
+                "INSERT INTO messages (session_id, user_id, role, content, created_at) VALUES($1, $2, $3, $4, NOW())",
+                uuid.UUID(session_id), user_id, "user", prompt
             )
 
-        # 3. Run the agent and get the response
-        
-        report_content = await get_agent_response(runner, prompt, user_id, session_id)
+        report_content = await get_agent_response(runner, prompt, str(user_id), session_id) # ADK expects string for user_id
 
         if not report_content:
             print(f"[Job {job_id}]: FATAL- No report content received from agent.")
             await update_job_status(job_id, "error")
             return
         
-        # Explicit Memory Save after completion for Long-Term Context
         print(f"[Job {job_id}]: Archiving session to Long-Term Memory...")
         try:
-            # A. Retrieve the active session object we just used
             session_obj = await runner.session_service.get_session(
-                app_name="agents", user_id=user_id, session_id=session_id
+                app_name="agents", user_id=str(user_id), session_id=session_id # ADK expects string for user_id
             )
-
-            # B. Save to Memory Service (for vector storage or recall)
             if session_obj:
                 await runner.memory_service.add_session_to_memory(session_obj)
                 print(f"[Job {job_id}]: Session archived successfully.")
@@ -223,19 +250,20 @@ async def run_agent_task(job_id: str, prompt: str, user_id: str, session_id: str
             print(f"[Job {job_id}]: WARNING- Failed to save memory: {mem_e}")
 
         # Log agent's report to the DB
-        async with db_pool.acquire() as conn: # type: ignore
+        async with db_pool.acquire() as conn:
+            # --- MODIFIED: Added user_id to INSERT ---
             await conn.execute(
-                "INSERT INTO messages (session_id, role, content) VALUES($1, $2, $3)",
-                session_id, "model", report_content
+                "INSERT INTO messages (session_id, user_id, role, content, created_at) VALUES($1, $2, $3, $4, NOW())",
+                uuid.UUID(session_id), user_id, "agent", report_content
             )
 
         # 4. Save Report and Complete Job
-        async with db_pool.acquire() as conn: # type: ignore
+        async with db_pool.acquire() as conn:
+            # --- MODIFIED: Added user_id to INSERT ---
             await conn.execute(
-                "INSERT INTO reports (job_id, content) VALUES($1, $2)", 
-                job_id, report_content
+                "INSERT INTO reports (job_id, user_id, content) VALUES($1, $2, $3)",
+                uuid.UUID(job_id), user_id, report_content
             )
-
 
             await update_job_status(job_id, "complete")
         print(f"[Job {job_id}]: Success Report Saved.")
@@ -246,27 +274,20 @@ async def run_agent_task(job_id: str, prompt: str, user_id: str, session_id: str
 
 
 async def get_agent_response(runner, prompt: str, user_id: str, session_id: str) -> str:
-        
     """
     Runs the agent and extracts the final text response for the database.
     """
-
-    # Prepare input for the agent
     user_input = types.Content(
         role="user",
         parts=[types.Part(text=prompt)]
     )
 
-
-    # Run and iterate through event stream
     final_text = ""
-    
     async for event in runner.run_async(
         user_id=user_id,
         session_id=session_id,
         new_message=user_input,
     ):
-        # Check if this event is the final answer from the model
         if event.is_final_response and event.content and event.content.parts:
             final_text = event.content.parts[0].text
             print(f"[Agent] Final response received.")
@@ -277,11 +298,11 @@ async def update_job_status(job_id: str, status: str):
     """
     Updates the status of a job in the database.
     """
-
     try:
-        async with db_pool.acquire() as conn: # type: ignore
+        async with db_pool.acquire() as conn:
+            # --- MODIFIED: Now using public.job_status_enum ---
             await conn.execute(
-                "UPDATE jobs SET status = $1 WHERE id = $2",
+                "UPDATE jobs SET status = $1::public.job_status_enum, updated_at = NOW() WHERE id = $2",
                 status,
                 uuid.UUID(job_id)
             )
@@ -290,63 +311,48 @@ async def update_job_status(job_id: str, status: str):
         print(f"[Job {job_id}]: Error updating status to '{status}': {e}")
 
 
-async def get_or_create_user(conn, user_id: str):
+# --- NEW: Function to ensure user_profile entry exists ---
+async def get_or_create_user_profile(conn, user_id: uuid.UUID):
     """
-    Fetches an existing user by id, or creates one if it doesn't exist.
-    Returns the user_id (UUID).
+    Ensures an entry exists in the public.user_profiles table for a given user_id.
+    This is called once the user's Supabase auth.uid() is known.
     """
-    try:
-        user_uuid = uuid.UUID(user_id)
-    except ValueError:
-        # If auth_token is not a valid UUID, generate one deterministically
-        # (in production, you'd extract/hash the token properly)
-        user_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, str(user_id))
+    # Check if user profile already exists
+    existing_profile_id = await conn.fetchval("SELECT id FROM user_profiles WHERE id = $1", user_id)
+    if existing_profile_id:
+        return user_id
 
-    # Check if user already exists
-    existing_user = await conn.fetchval("SELECT id FROM users WHERE id = $1", user_uuid)
-    if existing_user:
-        return user_uuid
-
-    # User doesn't exist, create one with minimal data
+    # User profile doesn't exist, create one with minimal data
     try:
-        # Generate a placeholder email based on the UUID
-        placeholder_email = f"user+{user_uuid}@brandspark.local"
         await conn.execute(
-            "INSERT INTO users (id, email) VALUES ($1, $2)",
-            user_uuid, placeholder_email
+            "INSERT INTO user_profiles (id, created_at, updated_at) VALUES ($1, NOW(), NOW())",
+            user_id
         )
-        print(f"Created new user: {user_uuid} with email: {placeholder_email}")
+        print(f"Created new user_profile entry for auth.uid(): {user_id}")
     except Exception as e:
-        # User might have been created by another request in a race condition
-        # Try to fetch again
-        existing_user = await conn.fetchval("SELECT id FROM users WHERE id = $1", user_uuid)
-        if existing_user:
-            return user_uuid
-        # If still fails, re-raise
+        # A race condition might occur where another request creates the profile
+        # Try to fetch again, if still fails, re-raise.
+        existing_profile_id = await conn.fetchval("SELECT id FROM user_profiles WHERE id = $1", user_id)
+        if existing_profile_id:
+            return user_id
         raise e
-
-    return user_uuid
+    return user_id
 
 
 # --- API Endpoints ---
 
 @app.post("/api/v1/jobs", response_model=JobStatus)
 async def create_job(
-    background_tasks: BackgroundTasks, # FastAPI injects this
+    background_tasks: BackgroundTasks,
     job_request: JobRequest = Body(...),
-    # In a real app, you'd verify auth_token here
-    # For our sprint, we skip auth verification
-    # user: User = Depends(get_current_user)
+    current_user_id: uuid.UUID = Depends(get_current_user_id) # NEW: Use auth dependency
 ):
     """
     Create a new analysis job.
     This runs instantly, creates the job, and schedules the agent
     to run in the background.
     """
-    # For now (Dev Mode), we hardcode user_id
-    # authenticated_user_id = user.id
-    authenticated_user_id = job_request.auth_token
-    # Get the session_id from the frontend request
+    authenticated_user_id = current_user_id # Renamed for clarity
     client_session_id = job_request.session_id
     print(f"Received new job request from {authenticated_user_id} with prompt: {job_request.prompt}")
     
@@ -357,28 +363,41 @@ async def create_job(
         )
 
     try:
-        # 1. Acquire a connection from the pool
         async with db_pool.acquire() as conn:
-            # 1a. Get or create the user
-            user_id = await get_or_create_user(conn, authenticated_user_id)
-            print(f"Using user_id: {user_id}")
+            # 1a. Ensure user_profile exists for RLS
+            await get_or_create_user_profile(conn, authenticated_user_id)
+            print(f"Ensured user_profile exists for user_id: {authenticated_user_id}")
 
             # 1b. Create session in DB first (if not exists)
-            existing_session = await conn.fetchval(
-                "SELECT COUNT(1) FROM sessions WHERE id = $1",
-                client_session_id
+            existing_session_owner = await conn.fetchval(
+                "SELECT user_id FROM sessions WHERE id = $1",
+                uuid.UUID(client_session_id)
             )
-            if existing_session == 0:
+
+            if existing_session_owner is None: # Session doesn't exist
                 await conn.execute(
-                    "INSERT INTO sessions (id, user_id, title) VALUES ($1, $2, $3)",
-                    client_session_id, user_id, job_request.prompt[:50]
+                    "INSERT INTO sessions (id, user_id, title, created_at, updated_at) VALUES ($1, $2, $3, NOW(), NOW())",
+                    uuid.UUID(client_session_id), authenticated_user_id, job_request.prompt[:50]
                 )
-                print(f"Session {client_session_id} created in DB.")
+                print(f"Session {client_session_id} created in DB for user {authenticated_user_id}.")
+            elif existing_session_owner != authenticated_user_id:
+                 raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Forbidden: Session ID belongs to another user."
+                )
+            else:
+                print(f"Session {client_session_id} already exists in DB for user {authenticated_user_id}.")
+                # Optionally update title/updated_at if session already exists
+                await conn.execute(
+                    "UPDATE sessions SET title = $1, updated_at = NOW() WHERE id = $2",
+                    job_request.prompt[:50], uuid.UUID(client_session_id)
+                )
             
             # 2. Insert the new job into the 'jobs' table
             new_job_id = await conn.fetchval(
-                "INSERT INTO jobs (prompt, status, session_id) VALUES ($1, $2, $3) RETURNING id",
-                job_request.prompt, 'pending', client_session_id
+                # --- MODIFIED: Added user_id to INSERT ---
+                "INSERT INTO jobs (user_id, session_id, prompt, status, created_at, updated_at) VALUES ($1, $2, $3, $4::public.job_status_enum, NOW(), NOW()) RETURNING id",
+                authenticated_user_id, uuid.UUID(client_session_id), job_request.prompt, 'pending'
             )
             
             if not new_job_id:
@@ -387,13 +406,12 @@ async def create_job(
             # 3. Add the REAL agent task to the background queue
             background_tasks.add_task(
                 run_agent_task, str(new_job_id), job_request.prompt, 
-                authenticated_user_id,
+                authenticated_user_id, # Pass the UUID object
                 client_session_id,
-                )
+            )
             
             print(f"Job {new_job_id} created and background task scheduled.")
             
-            # 4. Return the new job ID and 'pending' status immediately
             return JobStatus(job_id=str(new_job_id), status="pending")
     
     except Exception as e:
@@ -402,7 +420,7 @@ async def create_job(
 
 
 @app.get("/api/v1/jobs/{job_id}", response_model=ReportResponse)
-async def get_job_status(job_id: str):
+async def get_job_status(job_id: str, current_user_id: uuid.UUID = Depends(get_current_user_id)): # NEW: Add auth dependency
     """
     Get the status of a job.
     The frontend will poll this endpoint.
@@ -416,30 +434,33 @@ async def get_job_status(job_id: str):
         )
         
     try:
-        job_uuid = uuid.UUID(job_id) # Validate UUID format
+        job_uuid = uuid.UUID(job_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid job ID format. Must be a UUID.")
 
     try:
         async with db_pool.acquire() as conn:
-            # Check the job status first
-            job_record = await conn.fetchrow("SELECT status FROM jobs WHERE id = $1", job_uuid)
+            # --- MODIFIED: Added user_id to SELECT for RLS compatibility ---
+            job_record = await conn.fetchrow(
+                "SELECT status FROM jobs WHERE id = $1 AND user_id = $2",
+                job_uuid, current_user_id
+            )
             
             if not job_record:
-                raise HTTPException(status_code=404, detail="Job not found")
+                # IMPORTANT: Return 404 if not found OR not owned by user (RLS handles this too but explicit is clearer)
+                raise HTTPException(status_code=404, detail="Job not found or not accessible.")
 
             status = job_record['status']
 
             if status == "complete":
-                # If complete, fetch the report content
+                # --- MODIFIED: Added user_id to SELECT for RLS compatibility ---
                 report_content = await conn.fetchval(
-                    "SELECT content FROM reports WHERE job_id = $1",
-                    job_uuid
+                    "SELECT content FROM reports WHERE job_id = $1 AND user_id = $2",
+                    job_uuid, current_user_id
                 )
                 return ReportResponse(job_id=job_id, status="complete", report=report_content)
             
             else:
-                # If 'pending', 'running', or 'error', just return the status
                 return ReportResponse(job_id=job_id, status=status, report=None)
 
     except Exception as e:
@@ -448,7 +469,7 @@ async def get_job_status(job_id: str):
     
 
 @app.get("/api/v1/sessions", response_model=list[SessionSummary])
-async def get_all_sessions(auth_token: str): # Expect auth_token directly or via Depends if you implement proper auth
+async def get_all_sessions(current_user_id: uuid.UUID = Depends(get_current_user_id)): # NEW: Use auth dependency
     """
     Retrieves all chat sessions for the authenticated user.
     """
@@ -459,37 +480,32 @@ async def get_all_sessions(auth_token: str): # Expect auth_token directly or via
         )
 
     try:
-        authenticated_user_id = auth_token # As per your current backend logic
-        user_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, str(authenticated_user_id)) if not is_valid_uuid(authenticated_user_id) else uuid.UUID(authenticated_user_id)
-
+        authenticated_user_id = current_user_id # Using the ID from the JWT
+        
         async with db_pool.acquire() as conn:
-            # Fetch sessions for this user, ordered by most recent update
+            # This query is already good, RLS will also filter by user_id
             sessions = await conn.fetch(
                 "SELECT id, title, updated_at FROM sessions WHERE user_id = $1 ORDER BY updated_at DESC",
-                user_uuid
+                authenticated_user_id
             )
-            # Format to Pydantic model
             return [
                 SessionSummary(
                     id=str(s['id']),
                     title=s['title'],
-                    updated_at=s['updated_at'].isoformat() # Convert datetime to ISO string
+                    updated_at=s['updated_at'].isoformat()
                 ) for s in sessions
             ]
     except Exception as e:
         print(f"Error fetching all sessions: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
     
-# Helper to check if a string is a valid UUID
-def is_valid_uuid(uuid_to_test, version=4):
-    try:
-        uuid_obj = uuid.UUID(uuid_to_test, version=version)
-    except ValueError:
-        return False
-    return str(uuid_obj) == uuid_to_test
-    
+# --- REMOVED: is_valid_uuid helper as it's not needed with UUID type hints and JWT verification ---
+
 @app.get("/api/v1/sessions/{session_id}/messages", response_model=list[MessageResponseItem])
-async def get_session_messages(session_id: str, auth_token: str): # Expect auth_token for user verification
+async def get_session_messages(
+    session_id: str,
+    current_user_id: uuid.UUID = Depends(get_current_user_id) # NEW: Use auth dependency
+):
     """
     Retrieves all messages for a specific chat session, verifying user ownership.
     """
@@ -501,28 +517,29 @@ async def get_session_messages(session_id: str, auth_token: str): # Expect auth_
 
     try:
         session_uuid = uuid.UUID(session_id)
-        authenticated_user_id = auth_token
-        user_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, str(authenticated_user_id)) if not is_valid_uuid(authenticated_user_id) else uuid.UUID(authenticated_user_id)
+        authenticated_user_id = current_user_id # Using the ID from the JWT
 
         async with db_pool.acquire() as conn:
             # First, verify that the session belongs to the authenticated user
+            # RLS will also prevent fetching, but explicit check is good practice here.
             session_owner_id = await conn.fetchval(
                 "SELECT user_id FROM sessions WHERE id = $1",
                 session_uuid
             )
-            if not session_owner_id or session_owner_id != user_uuid:
+            if not session_owner_id or session_owner_id != authenticated_user_id:
                 raise HTTPException(status_code=403, detail="Forbidden: You do not own this session or it does not exist.")
 
             # If authorized, fetch messages
             messages = await conn.fetch(
-                "SELECT role, content, timestamp FROM messages WHERE session_id = $1 ORDER BY timestamp ASC",
+                # --- MODIFIED: Renamed timestamp to created_at ---
+                "SELECT role, content, created_at FROM messages WHERE session_id = $1 ORDER BY created_at ASC",
                 session_uuid
             )
             return [
                 MessageResponseItem(
                     role=m['role'],
                     content=m['content'],
-                    timestamp=m['timestamp'].isoformat() # Convert datetime to ISO string
+                    created_at=m['created_at'].isoformat()
                 ) for m in messages
             ]
     except ValueError:
@@ -534,8 +551,5 @@ async def get_session_messages(session_id: str, auth_token: str): # Expect auth_
 
 # --- Main Entry Point ---
 if __name__ == "__main__":
-    # Note: Uvicorn's 'reload=True' is great for dev but can be tricky
-    # with lifespan events. For production, run with gunicorn or similar.
     print("Starting Uvicorn server in reload mode...")
-    
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True) # Changed host to 0.0.0.0 for external access
