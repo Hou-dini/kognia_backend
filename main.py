@@ -143,20 +143,10 @@ async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depend
     """
     token = credentials.credentials # This is the JWT string
 
-    # 1. Attempt to decode the SUPABASE_JWT_SECRET as Base64 bytes.
-        #    HS256 expects the *bytes* of the secret.
-    try:
-        # Jose can take bytes directly for HS256 secrets.
-        # If SUPABASE_JWT_SECRET is truly Base64, this will produce the raw key bytes.
-        jwt_secret_bytes = b64decode(SUPABASE_JWT_SECRET)
-        print("DEBUG: JWT Secret successfully Base64 decoded to bytes.")
-    except Exception as e:
-        # If b64decode fails (e.g., the secret wasn't actually valid Base64
-        # despite looking like it, or it's a plain text secret),
-        # we treat the original string as the secret (but still convert to bytes
-        # as good practice for JWT libraries handling symmetric keys).
-        print(f"DEBUG: JWT Secret Base64 decode failed: {e}. Using raw string bytes.")
-        jwt_secret_bytes = SUPABASE_JWT_SECRET.encode('utf-8') # Assume UTF-8 for plain string secret
+    # HS256 expects the *bytes* of the secret.
+    jwt_secret_bytes = SUPABASE_JWT_SECRET.encode('utf-8')
+    print("DEBUG: Using JWT Secret as raw string bytes for verification.")
+    
 
     
     try:
