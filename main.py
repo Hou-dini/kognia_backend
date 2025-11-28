@@ -143,19 +143,36 @@ async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depend
     """
     token = credentials.credentials # This is the JWT string
 
-    # HS256 expects the *bytes* of the secret.
-    jwt_secret_bytes = SUPABASE_JWT_SECRET.encode('utf-8')
-    print("DEBUG: Using JWT Secret as raw string bytes for verification.")
-    print(f"DEBUG: Using JWT Secret (first 10 chars): {SUPABASE_JWT_SECRET[:10]}... (length: {len(SUPABASE_JWT_SECRET)})")
+    # Ensure SUPABASE_JWT_SECRET is actually loaded as a string and is not None/empty
+    if not SUPABASE_JWT_SECRET:
+        print("FATAL: SUPABASE_JWT_SECRET environment variable not set or is empty.")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Server configuration error: JWT secret not set."
+        )
 
+    # Supabase JWT secret is a Base64 encoded string,
+    # so we need to decode it to get the raw bytes for HS256 key.
+    try:
+        jwt_secret_bytes = b64decode(SUPABASE_JWT_SECRET)
+        print(f"DEBUG: JWT Secret successfully Base64 decoded. Length of decoded bytes: {len(jwt_secret_bytes)}")
+    except Exception as e:
+        # This catch means the SUPABASE_JWT_SECRET was NOT valid Base64,
+        # which would be unexpected for a Supabase secret.
+        print(f"FATAL: SUPABASE_JWT_SECRET is not a valid Base64 string during decoding: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Server configuration error: Invalid JWT secret format."
+        )
+    
     # Add detailed logging for the token received
     print(f"DEBUG: Raw token received (first 60 chars): {token[:60]}...")
     print(f"DEBUG: Token length: {len(token)}")
 
-    
     try:
         # Supabase JWTs are generally HS256 signed with the project's JWT secret
         payload = jwt.decode(token, jwt_secret_bytes, algorithms=["HS256"])
+        print("DEBUG: JWT DECODE SUCCESS!") # Log success
         user_id = payload.get("sub") # 'sub' claim is the user ID in Supabase JWTs
 
         if not user_id:
