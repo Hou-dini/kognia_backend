@@ -24,9 +24,9 @@ from google.adk.plugins.logging_plugin import LoggingPlugin
 from agents.agent import root_agent
 
 # --- Configuration ---
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://postgres.nmqruitpbhkjcuucqkgn:BrandSpart2025@aws-1-eu-north-1.pooler.supabase.com:5432/postgres")
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
 # --- NEW: Supabase JWT Secret ---
-SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET","o/rAeML82YdqtjbstQR/Ir/O0EGvgwKD5USFWm/gE7DoDOeRUtFic/tBPZRy2xbVxWYHVrsWIuKTaV02m1me0w==")
+SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET","")
 
 if not DATABASE_URL:
     print("FATAL: DATABASE_URL environment variable not set.")
