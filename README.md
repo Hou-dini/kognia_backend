@@ -1,4 +1,4 @@
-# 🚀 Flux Backend
+# 🚀 Kognia Backend
 
 A FastAPI-based backend service for Flux, built with async PostgreSQL support and Pydantic v1 for data validation.
 
@@ -19,8 +19,8 @@ A FastAPI-based backend service for Flux, built with async PostgreSQL support an
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/Hou-dini/flux_backend
-cd flux_backend
+git clone https://github.com/Hou-dini/kognia_backend
+cd kognia_backend
 
 python -m venv .venv
 # On Windows
