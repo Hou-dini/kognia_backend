@@ -2,7 +2,6 @@ import uvicorn
 import asyncpg
 import uuid
 import os
-import json # Added for JWT parsing
 from typing import Optional
 from asyncpg.pool import Pool
 
@@ -13,7 +12,7 @@ from pydantic import BaseModel, Field
 from contextlib import asynccontextmanager
 
 # For JWT verification
-from jose import jwt, jwk, JWTError, ExpiredSignatureError # Added for JWT
+from jose import jwt, JWTError, ExpiredSignatureError # Added for JWT
 from base64 import b64decode # Added for JWT
 
 from google.genai import types
@@ -144,21 +143,25 @@ async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depend
     """
     token = credentials.credentials # This is the JWT string
 
-    # Check if the secret looks like Base64 (ends with = or ==)
-    # Supabase secrets usually are Base64 encoded for display
+    # 1. Attempt to decode the SUPABASE_JWT_SECRET as Base64 bytes.
+        #    HS256 expects the *bytes* of the secret.
     try:
-        # Attempt to decode it. If it's not valid Base64, this will fail.
-        # We assume UTF-8 for the resulting string.
-        decoded_secret = b64decode(SUPABASE_JWT_SECRET).decode('utf-8')
-    except Exception:
-        # If decoding fails (e.g., it's not actually Base64), use it as is.
-        # This covers cases where the secret might genuinely not be Base64.
-        decoded_secret = SUPABASE_JWT_SECRET
+        # Jose can take bytes directly for HS256 secrets.
+        # If SUPABASE_JWT_SECRET is truly Base64, this will produce the raw key bytes.
+        jwt_secret_bytes = b64decode(SUPABASE_JWT_SECRET)
+        print("DEBUG: JWT Secret successfully Base64 decoded to bytes.")
+    except Exception as e:
+        # If b64decode fails (e.g., the secret wasn't actually valid Base64
+        # despite looking like it, or it's a plain text secret),
+        # we treat the original string as the secret (but still convert to bytes
+        # as good practice for JWT libraries handling symmetric keys).
+        print(f"DEBUG: JWT Secret Base64 decode failed: {e}. Using raw string bytes.")
+        jwt_secret_bytes = SUPABASE_JWT_SECRET.encode('utf-8') # Assume UTF-8 for plain string secret
 
     
     try:
         # Supabase JWTs are generally HS256 signed with the project's JWT secret
-        payload = jwt.decode(token, decoded_secret, algorithms=["HS256"])
+        payload = jwt.decode(token, jwt_secret_bytes, algorithms=["HS256"])
         user_id = payload.get("sub") # 'sub' claim is the user ID in Supabase JWTs
 
         if not user_id:
