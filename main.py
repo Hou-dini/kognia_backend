@@ -1,3 +1,4 @@
+import binascii
 import uvicorn
 import asyncpg
 import uuid
@@ -156,6 +157,8 @@ async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depend
     try:
         jwt_secret_bytes = b64decode(SUPABASE_JWT_SECRET)
         print(f"DEBUG: JWT Secret successfully Base64 decoded. Length of decoded bytes: {len(jwt_secret_bytes)}")
+        # --- NEW DEBUGGING LINE: Print hex representation of the decoded secret bytes ---
+        print(f"DEBUG: Decoded Secret Hex: {binascii.hexlify(jwt_secret_bytes).decode('ascii')}")
     except Exception as e:
         # This catch means the SUPABASE_JWT_SECRET was NOT valid Base64,
         # which would be unexpected for a Supabase secret.
