@@ -92,7 +92,7 @@ async def lifespan(app: FastAPI):
         memory_service = InMemoryMemoryService()
         session_service = DatabaseSessionService(db_url=adk_db_url_with_schema)
         app_with_compaction = App(
-            name="agents",
+            name="Kognia",
             root_agent=root_agent,
             events_compaction_config=EventsCompactionConfig(
                 compaction_interval=5,
@@ -121,7 +121,7 @@ async def lifespan(app: FastAPI):
 
 # --- FastAPI App Initialization ---
 app = FastAPI(
-    title="Flux API (Unified)",
+    title="Kognia API (Unified)",
     description="API to manage agentic brand and competitor analysis jobs. Runs agents as background tasks.",
     version="0.5.0",
     lifespan=lifespan
