@@ -3,6 +3,8 @@ import asyncpg
 import uuid
 import os
 import json # Added for JWT parsing
+from typing import Optional
+from asyncpg.pool import Pool
 
 from fastapi import FastAPI, HTTPException, Body, BackgroundTasks, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials # Added for auth
@@ -11,8 +13,8 @@ from pydantic import BaseModel, Field
 from contextlib import asynccontextmanager
 
 # For JWT verification
-from jose import jwt, jwk # Added for JWT
-from jose.utils import base64url_decode # Added for JWT
+from jose import jwt, jwk, JWTError, ExpiredSignatureError # Added for JWT
+from base64 import b64decode # Added for JWT
 
 from google.genai import types
 from google.adk.runners import Runner
@@ -37,7 +39,16 @@ if not SUPABASE_JWT_SECRET:
 
 
 # This will hold our database connection pool
-db_pool = None
+db_pool: Optional[Pool] = None
+
+
+def ensure_db_pool() -> None:
+    """
+    Raises RuntimeError if the database pool is not initialized.
+    Used to make usage sites explicit for static analysis and runtime checks.
+    """
+    if db_pool is None:
+        raise RuntimeError("Database pool is not initialized")
 
 # --- Lifespan Management ---
 @asynccontextmanager
@@ -52,6 +63,7 @@ async def lifespan(app: FastAPI):
             min_size=1,
             max_size=10
         )
+        ensure_db_pool()
         async with db_pool.acquire() as connection:
             test_query = await connection.fetchval("SELECT 1")
             if test_query == 1:
@@ -131,10 +143,22 @@ async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depend
     and returns the user_id (UUID).
     """
     token = credentials.credentials # This is the JWT string
+
+    # Check if the secret looks like Base64 (ends with = or ==)
+    # Supabase secrets usually are Base64 encoded for display
+    try:
+        # Attempt to decode it. If it's not valid Base64, this will fail.
+        # We assume UTF-8 for the resulting string.
+        decoded_secret = b64decode(SUPABASE_JWT_SECRET).decode('utf-8')
+    except Exception:
+        # If decoding fails (e.g., it's not actually Base64), use it as is.
+        # This covers cases where the secret might genuinely not be Base64.
+        decoded_secret = SUPABASE_JWT_SECRET
+
     
     try:
         # Supabase JWTs are generally HS256 signed with the project's JWT secret
-        payload = jwt.decode(token, SUPABASE_JWT_SECRET, algorithms=["HS256"])
+        payload = jwt.decode(token, decoded_secret, algorithms=["HS256"])
         user_id = payload.get("sub") # 'sub' claim is the user ID in Supabase JWTs
 
         if not user_id:
@@ -146,13 +170,13 @@ async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depend
         
         # Ensure the user_id is a valid UUID
         return uuid.UUID(user_id)
-    except jwt.ExpiredSignatureError:
+    except ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has expired",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    except jwt.JWTError:
+    except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials: Invalid token signature or format.",
@@ -222,6 +246,7 @@ async def run_agent_task(job_id: str, prompt: str, user_id: uuid.UUID, session_i
 
 
         # Log user's message to the DB
+        ensure_db_pool()
         async with db_pool.acquire() as conn:
             # --- MODIFIED: Added user_id to INSERT ---
             await conn.execute(
@@ -250,6 +275,7 @@ async def run_agent_task(job_id: str, prompt: str, user_id: uuid.UUID, session_i
             print(f"[Job {job_id}]: WARNING- Failed to save memory: {mem_e}")
 
         # Log agent's report to the DB
+        ensure_db_pool()
         async with db_pool.acquire() as conn:
             # --- MODIFIED: Added user_id to INSERT ---
             await conn.execute(
@@ -258,6 +284,7 @@ async def run_agent_task(job_id: str, prompt: str, user_id: uuid.UUID, session_i
             )
 
         # 4. Save Report and Complete Job
+        ensure_db_pool()
         async with db_pool.acquire() as conn:
             # --- MODIFIED: Added user_id to INSERT ---
             await conn.execute(
@@ -299,6 +326,7 @@ async def update_job_status(job_id: str, status: str):
     Updates the status of a job in the database.
     """
     try:
+        ensure_db_pool()
         async with db_pool.acquire() as conn:
             # --- MODIFIED: Now using public.job_status_enum ---
             await conn.execute(
@@ -439,6 +467,7 @@ async def get_job_status(job_id: str, current_user_id: uuid.UUID = Depends(get_c
         raise HTTPException(status_code=400, detail="Invalid job ID format. Must be a UUID.")
 
     try:
+        ensure_db_pool()
         async with db_pool.acquire() as conn:
             # --- MODIFIED: Added user_id to SELECT for RLS compatibility ---
             job_record = await conn.fetchrow(
@@ -481,7 +510,8 @@ async def get_all_sessions(current_user_id: uuid.UUID = Depends(get_current_user
 
     try:
         authenticated_user_id = current_user_id # Using the ID from the JWT
-        
+
+        ensure_db_pool()
         async with db_pool.acquire() as conn:
             # This query is already good, RLS will also filter by user_id
             sessions = await conn.fetch(
@@ -519,6 +549,7 @@ async def get_session_messages(
         session_uuid = uuid.UUID(session_id)
         authenticated_user_id = current_user_id # Using the ID from the JWT
 
+        ensure_db_pool()
         async with db_pool.acquire() as conn:
             # First, verify that the session belongs to the authenticated user
             # RLS will also prevent fetching, but explicit check is good practice here.
