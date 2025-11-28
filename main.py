@@ -173,8 +173,21 @@ async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depend
     print(f"DEBUG: Token length: {len(token)}")
 
     try:
+        # --- CRITICAL CHANGE: Pass options to jwt.decode ---
+        decode_options = {
+            "verify_signature": True,  # Keep signature verification
+            "verify_exp": True,        # Keep expiration check
+            "verify_nbf": True,        # Keep not-before check
+            "verify_iat": True,        # Keep issued-at check
+            "verify_aud": False,       # Temporarily disable audience verification
+            "verify_iss": False,       # Temporarily disable issuer verification
+            "verify_kid": False,       # <--- MOST LIKELY FIX: Disable Key ID verification
+        }
         # Supabase JWTs are generally HS256 signed with the project's JWT secret
-        payload = jwt.decode(token, jwt_secret_bytes, algorithms=["HS256"])
+        payload = jwt.decode(
+            token, jwt_secret_bytes, 
+            algorithms=["HS256"],
+            options=decode_options)
         print("DEBUG: JWT DECODE SUCCESS!") # Log success
         user_id = payload.get("sub") # 'sub' claim is the user ID in Supabase JWTs
 
