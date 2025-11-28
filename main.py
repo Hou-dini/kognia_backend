@@ -13,8 +13,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from contextlib import asynccontextmanager
 
-# For JWT verification
-from jose import jwt, JWTError, ExpiredSignatureError # Added for JWT
+import jwt as pyjwt # Alias to avoid conflict with `jwt` Pydantic field
+from jwt import PyJWTError, ExpiredSignatureError, InvalidTokenError, InvalidSignatureError, DecodeError
 from base64 import b64decode # Added for JWT
 
 from google.genai import types
@@ -158,98 +158,90 @@ async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depend
     try:
         jwt_secret_bytes = b64decode(SUPABASE_JWT_SECRET)
         print(f"DEBUG: JWT Secret successfully Base64 decoded. Length of decoded bytes: {len(jwt_secret_bytes)}")
-        # --- NEW DEBUGGING LINE: Print hex representation of the decoded secret bytes ---
         print(f"DEBUG: Decoded Secret Hex: {binascii.hexlify(jwt_secret_bytes).decode('ascii')}")
     except Exception as e:
-        # This catch means the SUPABASE_JWT_SECRET was NOT valid Base64,
-        # which would be unexpected for a Supabase secret.
         print(f"FATAL: SUPABASE_JWT_SECRET is not a valid Base64 string during decoding: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Server configuration error: Invalid JWT secret format."
         )
     
-    # Add detailed logging for the token received
     print(f"DEBUG: Raw token received (first 60 chars): {token[:60]}...")
     print(f"DEBUG: Token length: {len(token)}")
-
-    # --- NEW DEBUGGING: Detailed Token Inspection and Server Time ---
     print(f"DEBUG: Server current UTC time: {datetime.datetime.now(datetime.timezone.utc).isoformat()}")
 
-    try:
-        header_b64, payload_b64, signature_b64 = token.split('.')
-        print(f"DEBUG: Token Header (Base64 URL-encoded): {header_b64}")
-        print(f"DEBUG: Token Payload (Base64 URL-encoded): {payload_b64}")
-        print(f"DEBUG: Token Signature (Base64 URL-encoded): {signature_b64}")
-
-        # Try to Base64 URL-decode parts for even deeper inspection
-        # (Using standard b64decode and padding, which jwt.io does internally for display)
-        # Note: JWT uses URL-safe Base64 without padding. `b64decode` needs padding for standard.
-        def urlsafe_b64decode_with_padding(data):
-            _data = data.replace('-', '+').replace('_', '/')
-            missing_padding = len(_data) % 4
-            if missing_padding:
-                _data += '=' * (4 - missing_padding)
-            return b64decode(_data)
-
-        decoded_header_json = urlsafe_b64decode_with_padding(header_b64).decode('utf-8')
-        decoded_payload_json = urlsafe_b64decode_with_padding(payload_b64).decode('utf-8')
-        print(f"DEBUG: Decoded Header JSON: {decoded_header_json}")
-        print(f"DEBUG: Decoded Payload JSON: {decoded_payload_json}")
-
-        # The data that gets signed (header.payload)
-        signing_input = f"{header_b64}.{payload_b64}".encode('utf-8')
-        print(f"DEBUG: Signing Input Bytes (Hex): {binascii.hexlify(signing_input).decode('ascii')}")
-
-    except Exception as e:
-        print(f"DEBUG: Could not parse or decode token parts for deep inspection: {e}")
-    # --- END NEW DEBUGGING ---
+    # Initialize user_id here to prevent "possibly unbound" errors
+    user_id = None # <--- THE FIX
 
     try:
-        # --- CRITICAL CHANGE: Pass options to jwt.decode ---
-        decode_options = {
-            "verify_signature": True,  # Keep signature verification
-            "verify_exp": True,        # Keep expiration check
-            "verify_nbf": True,        # Keep not-before check
-            "verify_iat": True,        # Keep issued-at check
-            "verify_aud": False,       # Temporarily disable audience verification
-            "verify_iss": False,       # Temporarily disable issuer verification
-            "verify_kid": False,       # <--- MOST LIKELY FIX: Disable Key ID verification
-        }
-        # Supabase JWTs are generally HS256 signed with the project's JWT secret
-        payload = jwt.decode(
-            token, jwt_secret_bytes, 
+        payload = pyjwt.decode(
+            token,
+            key=jwt_secret_bytes,
             algorithms=["HS256"],
-            options=decode_options)
-        print("DEBUG: JWT DECODE SUCCESS!") # Log success
-        user_id = payload.get("sub") # 'sub' claim is the user ID in Supabase JWTs
+            options={
+                "verify_aud": False,
+                "verify_iss": False,
+            }
+        )
+
+        print("DEBUG: JWT DECODE SUCCESS (PyJWT)!")
+        user_id = payload.get("sub") # Now user_id is assigned if decode succeeds
 
         if not user_id:
+            print("DEBUG: JWT payload missing 'sub' claim.")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Could not validate credentials: Missing user ID in token.",
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
-        # Ensure the user_id is a valid UUID
-        return uuid.UUID(user_id)
+        parsed_user_id = uuid.UUID(user_id) # This line now safely refers to user_id
+        print(f"DEBUG: Authenticated user_id: {parsed_user_id}")
+        return parsed_user_id
+        
     except ExpiredSignatureError:
+        print("DEBUG: Token has expired (PyJWT).")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has expired",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    except JWTError as e:
-        print(f"DEBUG: JWT verification failed with specific error: {e}")
+    except InvalidSignatureError as e:
+        print(f"DEBUG: JWT signature verification failed (PyJWT): {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials: Invalid token signature or format.",
+            detail=f"Could not validate credentials: Invalid signature. ({e})",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    except ValueError: # If user_id is not a valid UUID string
+    except DecodeError as e:
+        print(f"DEBUG: JWT decode error (PyJWT): {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Could not validate credentials: Invalid token format or algorithm. ({e})",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except PyJWTError as e:
+        print(f"DEBUG: Generic PyJWT error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Could not validate credentials: {e}",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except ValueError as e: # This handles cases where `user_id` might be non-None but invalid UUID string
+        # This block specifically needs user_id to be potentially bound.
+        # If user_id was None, the UUID(user_id) call would already fail with TypeError.
+        # So, this block only executes if user_id was assigned a non-None, non-UUID string.
+        print(f"DEBUG: Invalid UUID format for user_id in token: {user_id}. Error: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials: Invalid user ID format in token.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except Exception as e:
+        print(f"DEBUG: Unexpected error during JWT authentication: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error during authentication.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
