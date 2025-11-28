@@ -1,4 +1,5 @@
 import binascii
+import datetime
 import uvicorn
 import asyncpg
 import uuid
@@ -171,6 +172,38 @@ async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depend
     # Add detailed logging for the token received
     print(f"DEBUG: Raw token received (first 60 chars): {token[:60]}...")
     print(f"DEBUG: Token length: {len(token)}")
+
+    # --- NEW DEBUGGING: Detailed Token Inspection and Server Time ---
+    print(f"DEBUG: Server current UTC time: {datetime.datetime.now(datetime.timezone.utc).isoformat()}")
+
+    try:
+        header_b64, payload_b64, signature_b64 = token.split('.')
+        print(f"DEBUG: Token Header (Base64 URL-encoded): {header_b64}")
+        print(f"DEBUG: Token Payload (Base64 URL-encoded): {payload_b64}")
+        print(f"DEBUG: Token Signature (Base64 URL-encoded): {signature_b64}")
+
+        # Try to Base64 URL-decode parts for even deeper inspection
+        # (Using standard b64decode and padding, which jwt.io does internally for display)
+        # Note: JWT uses URL-safe Base64 without padding. `b64decode` needs padding for standard.
+        def urlsafe_b64decode_with_padding(data):
+            _data = data.replace('-', '+').replace('_', '/')
+            missing_padding = len(_data) % 4
+            if missing_padding:
+                _data += '=' * (4 - missing_padding)
+            return b64decode(_data)
+
+        decoded_header_json = urlsafe_b64decode_with_padding(header_b64).decode('utf-8')
+        decoded_payload_json = urlsafe_b64decode_with_padding(payload_b64).decode('utf-8')
+        print(f"DEBUG: Decoded Header JSON: {decoded_header_json}")
+        print(f"DEBUG: Decoded Payload JSON: {decoded_payload_json}")
+
+        # The data that gets signed (header.payload)
+        signing_input = f"{header_b64}.{payload_b64}".encode('utf-8')
+        print(f"DEBUG: Signing Input Bytes (Hex): {binascii.hexlify(signing_input).decode('ascii')}")
+
+    except Exception as e:
+        print(f"DEBUG: Could not parse or decode token parts for deep inspection: {e}")
+    # --- END NEW DEBUGGING ---
 
     try:
         # --- CRITICAL CHANGE: Pass options to jwt.decode ---
