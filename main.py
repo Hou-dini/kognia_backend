@@ -146,7 +146,11 @@ async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depend
     # HS256 expects the *bytes* of the secret.
     jwt_secret_bytes = SUPABASE_JWT_SECRET.encode('utf-8')
     print("DEBUG: Using JWT Secret as raw string bytes for verification.")
-    
+    print(f"DEBUG: Using JWT Secret (first 10 chars): {SUPABASE_JWT_SECRET[:10]}... (length: {len(SUPABASE_JWT_SECRET)})")
+
+    # Add detailed logging for the token received
+    print(f"DEBUG: Raw token received (first 60 chars): {token[:60]}...")
+    print(f"DEBUG: Token length: {len(token)}")
 
     
     try:
