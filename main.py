@@ -193,7 +193,8 @@ async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depend
             detail="Token has expired",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    except JWTError:
+    except JWTError as e:
+        print(f"DEBUG: JWT verification failed with specific error: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials: Invalid token signature or format.",
