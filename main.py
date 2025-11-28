@@ -6,6 +6,7 @@ import uuid
 import os
 from typing import Optional
 from asyncpg.pool import Pool
+import hashlib
 
 from fastapi import FastAPI, HTTPException, Body, BackgroundTasks, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials # Added for auth
@@ -153,17 +154,18 @@ async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depend
             detail="Server configuration error: JWT secret not set."
         )
 
-    # Supabase JWT secret is a Base64 encoded string,
-    # so we need to decode it to get the raw bytes for HS256 key.
+    # --- THIS IS THE CRITICAL CHANGE ---
+    # Based on jwt.io's "UTF-8" verification with your secret,
+    # the effective key is the SHA256 hash of the UTF-8 encoded secret string.
     try:
-        jwt_secret_bytes = b64decode(SUPABASE_JWT_SECRET)
-        print(f"DEBUG: JWT Secret successfully Base64 decoded. Length of decoded bytes: {len(jwt_secret_bytes)}")
-        print(f"DEBUG: Decoded Secret Hex: {binascii.hexlify(jwt_secret_bytes).decode('ascii')}")
+        jwt_secret_bytes = hashlib.sha256(SUPABASE_JWT_SECRET.encode('utf-8')).digest()
+        print(f"DEBUG: Calculated JWT Secret successfully. Length of bytes: {len(jwt_secret_bytes)}")
+        print(f"DEBUG: Calculated Secret Hex: {binascii.hexlify(jwt_secret_bytes).decode('ascii')}")
     except Exception as e:
-        print(f"FATAL: SUPABASE_JWT_SECRET is not a valid Base64 string during decoding: {e}")
+        print(f"FATAL: Error hashing SUPABASE_JWT_SECRET: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Server configuration error: Invalid JWT secret format."
+            detail="Server configuration error: Invalid JWT secret processing."
         )
     
     print(f"DEBUG: Raw token received (first 60 chars): {token[:60]}...")
