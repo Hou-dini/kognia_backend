@@ -359,7 +359,7 @@ async def run_agent_task(job_id: str, prompt: str, user_id: uuid.UUID, session_i
 
     except Exception as e:
         print(f"[Job {job_id}]: FATAL- Error: {e}")
-        await update_job_status(job_id, "error")
+        await update_job_status(job_id, "failed")
 
 
 async def get_agent_response(runner, prompt: str, user_id: str, session_id: str) -> str:
