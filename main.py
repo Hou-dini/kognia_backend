@@ -154,10 +154,14 @@ async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depend
             detail="Server configuration error: JWT secret not set."
         )
 
-    # --- THIS IS THE CRITICAL CHANGE ---
-    # Based on jwt.io's "UTF-8" verification with your secret,
-    # the effective key is the SHA256 hash of the UTF-8 encoded secret string.
+    # SUPABASE_JWT_SECRET holds a 64 byte key that results in SignalVerificationFailed error when
+    # used to verify the token.  The token was signed with `HS256`, which requires a 32-byte key.
+    # Attempting to verify a 32-byte (HS256) signature with a 64-byte key (derived from Base64 decoding)
+    # caused the `Signature verification failed` error.
     try:
+        # So we convert it to 32 bytes by:
+        # 1. Encoding it to its UTF-8 byte representation (88 bytes).
+        # 2. Applying `hashlib.sha256()` to this 88-byte string, which produces the required 32-byte (256-bit) digest.
         jwt_secret_bytes = hashlib.sha256(SUPABASE_JWT_SECRET.encode('utf-8')).digest()
         print(f"DEBUG: Calculated JWT Secret successfully. Length of bytes: {len(jwt_secret_bytes)}")
         print(f"DEBUG: Calculated Secret Hex: {binascii.hexlify(jwt_secret_bytes).decode('ascii')}")
@@ -173,7 +177,7 @@ async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depend
     print(f"DEBUG: Server current UTC time: {datetime.datetime.now(datetime.timezone.utc).isoformat()}")
 
     # Initialize user_id here to prevent "possibly unbound" errors
-    user_id = None # <--- THE FIX
+    user_id = None 
 
     try:
         payload = pyjwt.decode(
@@ -286,11 +290,11 @@ async def run_agent_task(job_id: str, prompt: str, user_id: uuid.UUID, session_i
     runner = app.state.runner
     if not runner:
         print(f"[Job {job_id}]: FATAL- Runner not initialized.")
-        await update_job_status(job_id, "error")
+        await update_job_status(job_id, "failed")
         return
     
     try:
-        await update_job_status(job_id, "running")
+        await update_job_status(job_id, "processing")
 
         print(f"[Job {job_id}]: Creating ADK session: {session_id} for user: {user_id}...")
         try:
@@ -316,7 +320,7 @@ async def run_agent_task(job_id: str, prompt: str, user_id: uuid.UUID, session_i
 
         if not report_content:
             print(f"[Job {job_id}]: FATAL- No report content received from agent.")
-            await update_job_status(job_id, "error")
+            await update_job_status(job_id, "failed")
             return
         
         print(f"[Job {job_id}]: Archiving session to Long-Term Memory...")
@@ -350,7 +354,7 @@ async def run_agent_task(job_id: str, prompt: str, user_id: uuid.UUID, session_i
                 uuid.UUID(job_id), user_id, report_content
             )
 
-            await update_job_status(job_id, "complete")
+            await update_job_status(job_id, "completed")
         print(f"[Job {job_id}]: Success Report Saved.")
 
     except Exception as e:
@@ -545,7 +549,7 @@ async def get_job_status(job_id: str, current_user_id: uuid.UUID = Depends(get_c
                     "SELECT content FROM reports WHERE job_id = $1 AND user_id = $2",
                     job_uuid, current_user_id
                 )
-                return ReportResponse(job_id=job_id, status="complete", report=report_content)
+                return ReportResponse(job_id=job_id, status="completed", report=report_content)
             
             else:
                 return ReportResponse(job_id=job_id, status=status, report=None)
