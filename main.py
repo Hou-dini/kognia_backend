@@ -145,7 +145,14 @@ async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depend
             detail="Server configuration error: JWT secret not set."
         )
 
+    # SUPABASE_JWT_SECRET holds a 64 byte key that results in `Signature verification failed` error when
+    # used to verify the token.  The token was signed with `HS256`, which requires a 32-byte key.
+    # Attempting to verify a 32-byte (HS256) signature with a 64-byte key (derived from Base64 decoding)
+    # caused the `Signature verification failed` error.
     try:
+        # So we convert it to 32 bytes by:
+        # 1. Encoding it to its UTF-8 byte representation (88 bytes).
+        # 2. Applying `hashlib.sha256()` to this 88-byte string, which produces the required 32-byte (256-bit) digest.
         jwt_secret_bytes = hashlib.sha256(SUPABASE_JWT_SECRET.encode('utf-8')).digest()
         print(f"DEBUG: Calculated JWT Secret successfully. Length of bytes: {len(jwt_secret_bytes)}")
         print(f"DEBUG: Calculated Secret Hex: {binascii.hexlify(jwt_secret_bytes).decode('ascii')}")
