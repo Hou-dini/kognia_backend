@@ -5,7 +5,12 @@ from google.genai import types
 from config import model
 
 
-simulation_agent_config = types.GenerateContentConfig()
+simulation_agent_config = types.GenerateContentConfig(
+    temperature=0.6,
+    top_p=0.9,
+    top_k=50
+    )
+
 
 
 instructions = """

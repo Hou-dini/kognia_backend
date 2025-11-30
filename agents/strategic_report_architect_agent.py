@@ -1,6 +1,13 @@
 from google.adk.agents import LlmAgent
+from google.genai import types
 
 from config import model
+
+strategic_report_architect_config = types.GenerateContentConfig(
+    temperature=0.4,
+    top_p=0.9,
+    top_k=40
+)
 
 instruction = """
 **You are a StrategicReport Architect, a high-level agent within Kognia AI. 
@@ -65,5 +72,6 @@ strategic_report_architect_agent = LlmAgent(
     "and presentation-ready strategic report.",
     model=model,
     instruction=instruction,
+    generate_content_config=strategic_report_architect_config,
     output_key="strategic_report"
 )

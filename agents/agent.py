@@ -1,5 +1,6 @@
 from google.adk.agents import LlmAgent
 from google.adk.tools.agent_tool import AgentTool
+from google.genai import types
 
 from agents.market_intel_agent import market_intel_agent
 from agents.executive_briefer_agent import executive_briefer_agent
@@ -8,6 +9,12 @@ from agents.conversation_simulator_agent import conversation_simulator_agent
 from agents.strategic_report_architect_agent import strategic_report_architect_agent
 from config import model
 
+
+kognia_nexus_config = types.GenerateContentConfig(
+    temperature=0.5,
+    top_p=0.9,
+    top_k=40
+)
 
 instruction = """
 **You are Kognia Nexus, the central intelligence orchestrator of the Kognia AI platform.**
@@ -62,6 +69,7 @@ root_agent = LlmAgent(
     description="The central intelligence orchestrator of the Kognia AI platform.",
     model=model,
     instruction=instruction,
+    generate_content_config=kognia_nexus_config,
     tools=[
          AgentTool(market_intel_agent), 
          AgentTool(executive_briefer_agent),
