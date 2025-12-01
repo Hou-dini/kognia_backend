@@ -72,14 +72,14 @@ The foundational analytical document (e.g., from `MarketIntel Analyst`, `Strateg
 *   `{simulation_prompt}`: Specifies personas, topic, and desired output format.
 
 **Output Protocol:**
-*   Immediately upon receiving both inputs, generate the complete simulated conversation as a direct, formatted transcript.
+*   Immediately upon receiving the relevant inputs, generate the complete simulated conversation as a direct, formatted transcript.
 *   Begin with a professional introductory statement (e.g., "Kognia AI presents the following simulated conversation, based on your request and the provided analytical report:").
 *   **Crucially, do not add any external commentary, analysis, summaries, or facilitator notes outside the simulated conversation itself, 
 unless explicitly requested as a persona within the `simulation_prompt`.**
 """
 
 conversation_simulator_agent = LlmAgent(
-    name="Conversation_Simulation_Agent",
+    name="conversation_simulator_agent",
     description="An agent specialized in generating dynamic, authentic, and insight-rich conversations between defined personas, " \
     "grounded in specific analytical reports.",
     model=model,

@@ -15,13 +15,13 @@ from pydantic import BaseModel, Field
 from contextlib import asynccontextmanager
 
 import jwt as pyjwt
-from jwt import PyJWTError, ExpiredSignatureError, InvalidTokenError, InvalidSignatureError, DecodeError
-from base64 import b64decode
+from jwt import PyJWTError, ExpiredSignatureError, InvalidSignatureError, DecodeError
+
 
 from google.genai import types
 from google.adk.runners import Runner
 from google.adk.memory import InMemoryMemoryService
-from google.adk.sessions import DatabaseSessionService, InMemorySessionService # <<< ADD InMemorySessionService
+from google.adk.sessions import InMemorySessionService 
 from google.adk.apps.app import App, EventsCompactionConfig
 from google.adk.plugins.logging_plugin import LoggingPlugin
 
@@ -79,9 +79,10 @@ async def lifespan(app: FastAPI):
     print("Initializing ADK Agent Runner and Services...")
     try:
         # --- REMOVED DatabaseSessionService and its DB_URL setup ---
+        # because there were errors involving ADK creating its sessions table in Supabase
         # --- Using InMemorySessionService instead ---
         memory_service = InMemoryMemoryService()
-        session_service = InMemorySessionService() # <<< CHANGED
+        session_service = InMemorySessionService() 
         
         app_with_compaction = App(
             name="agents",
@@ -97,7 +98,7 @@ async def lifespan(app: FastAPI):
             memory_service=memory_service,
             session_service=session_service
         )
-        print("ADK Agent Runner initialized with InMemorySessionService.") # <<< LOG CHANGE
+        print("ADK Agent Runner initialized with InMemorySessionService.") 
         app.state.runner = runner_instance
     except Exception as e:
         print(f"FATAL: Could not initialize ADK Agent Runner: {e}")
@@ -111,7 +112,7 @@ async def lifespan(app: FastAPI):
         await db_pool.close()
         print("Database pool closed.")
 
-# --- FastAPI App Initialization (rest of code is unchanged) ---
+# --- FastAPI App Initialization ---
 app = FastAPI(
     title="Flux API (Unified)",
     description="API to manage agentic brand and competitor analysis jobs. Runs agents as background tasks.",

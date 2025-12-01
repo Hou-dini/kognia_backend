@@ -92,7 +92,7 @@ or entities over time and across regions, enabling data-driven trend projections
   """
 
 market_intel_agent = LlmAgent(
-    name="MarketIntel_Agent",
+    name="market_intel_agent",
     description="An agent that generates meticulously researched, objective, and actionable market and competitor intelligence reports.",
     model=model,
     instruction=instruction,

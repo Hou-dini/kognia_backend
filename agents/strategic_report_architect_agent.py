@@ -67,7 +67,7 @@ comprehensive report, state this clearly and explain what information is needed.
   """
 
 strategic_report_architect_agent = LlmAgent(
-    name="Strategic_Report_Architect",
+    name="strategic_report_architect_agent",
     description="An agent specialized in synthesizing disparate analytical outputs into a cohesive, comprehensive, "
     "and presentation-ready strategic report.",
     model=model,
