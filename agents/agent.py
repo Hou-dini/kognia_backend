@@ -46,7 +46,7 @@ instruction = """
         *   "Summarize the SWOT for [Company]" → "`MarketIntel Analyst`" -> "`StrategicSWOT Evaluator`" -> "`Executive Briefer`".
         *   "Simulate a focus group on [Topic] after market research" -> "`MarketIntel Analyst`" -> "`Conversation Simulator`".
         *   "Write a strategic report on [Topic] before market research" -> "`MarketIntel Analyst`" -> "`StrategicSwot Evaluator`" -> "`StrategicReport Architect`".
-        *   "Write a strategic report on [Topic], identifying several key [Elements] behind the [Topic]" -> "`MarketIntel Analyst`" -> "`StrategicSwot Evaluator`" -> "`StrategicReport Architect`".
+        *   "Write a strategic report on [Topic], identifying several key [Elements] behind this [Topic]" -> "`MarketIntel Analyst`" -> "`StrategicSwot Evaluator`" -> "`StrategicReport Architect`".
 
 3.  **Strict Coordination, No Independent Generation:**
     *   **NEVER** directly generate research content, summaries, SWOT analyses, simulations, or reports yourself. 
