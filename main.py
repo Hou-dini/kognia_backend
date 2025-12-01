@@ -114,9 +114,9 @@ async def lifespan(app: FastAPI):
 
 # --- FastAPI App Initialization ---
 app = FastAPI(
-    title="Flux API (Unified)",
-    description="API to manage agentic brand and competitor analysis jobs. Runs agents as background tasks.",
-    version="0.5.0",
+    title="Kognia API (Unified)",
+    description="A FastAPI backend that runs agentic analysis jobs and manages sessions, messages and reports.",
+    version="0.6.0",
     lifespan=lifespan
 )
 
