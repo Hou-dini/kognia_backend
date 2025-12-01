@@ -39,8 +39,13 @@ Kognia AI functions as a virtual strategy team rather than a simple chatbot. It 
 
 Kognia AI uses a hierarchical orchestration pattern. Agents are specialized and lightweight, reducing hallucination risk and improving reliability. The orchestrator delegates tasks to specialists, which then return structured outputs for synthesis and reporting.
 
+
 ![Kognia AI Architecture diagram](assets/architecture.png)
 > Visual representation of the Kognia AI architecture
+
+![Kognia AI Architecture diagram](assets/architecture2.png)
+> Visual representation of the Kognia AI architecture
+
 
 **The orchestrator — `kognia_nexus_agent`**
 
@@ -48,9 +53,9 @@ Built with Google ADK primitives, the orchestrator evaluates user intent and ass
 
 **Specialist agents (examples)**
 
-- Market Intel Analyst (`market_intel_analyst_agent`) — collects and verifies factual data using grounded search and URL/context scraping.
+- Market Intel Analyst (`market_intel_agent`) — collects and verifies factual data using grounded search and URL/context scraping.
 - SWOT Evaluator (`strategic_swot_evaluator_agent`) — applies strategic frameworks to categorize strengths, weaknesses, opportunities and threats.
-- Report Architect (`strategic_report_architect`) — merges research and analysis into client-ready reports.
+- Report Architect (`strategic_report_architect_agent`) — merges research and analysis into client-ready reports.
 - Executive Briefer (`executive_briefer_agent`) — distills long reports into concise executive summaries.
 - Conversation Simulator (`conversation_simulator_agent`) — roleplays audience personas to test messaging and surface issues.
 
@@ -125,7 +130,10 @@ Environment variables required or commonly used by the project:
 
 - `DATABASE_URL` — Postgres connection string, e.g. `postgresql://user:pass@host:5432/dbname`
 - `SUPABASE_JWT_SECRET` — Supabase project's JWT secret (may be Base64 encoded; the app will attempt to decode)
+- `GOOGLE_API_KEY` — Api key for accessing Gemini models. 
+- `GOOGLE_GENAI_USE_VERTEXAI` — false
 - `GOOGLE_APPLICATION_CREDENTIALS` — Optional path to Google service account JSON for ADK/GenAI
+- `PYTHON_VERSION` — 3.11.9 
 
 Use your host's secret manager (Render secrets, GCP Secret Manager, etc.) to store these securely.
 
@@ -198,7 +206,7 @@ Consult the Google ADK documentation for authentication, usage quotas, and best 
 
 Render
 
-- Use the provided `render.yaml` or create a new Web Service. Set environment variables (`DATABASE_URL`, `SUPABASE_JWT_SECRET`, and optionally `GOOGLE_APPLICATION_CREDENTIALS`).
+- Use the provided `render.yaml` or create a new Web Service. Set environment variables (`DATABASE_URL`, `SUPABASE_JWT_SECRET`, `GOOGLE_API_KEY` and optionally `GOOGLE_APPLICATION_CREDENTIALS`).
 - Build: `pip install -r requirements.txt`.
 - Start: `uvicorn main:app --host 0.0.0.0 --port $PORT`.
 
