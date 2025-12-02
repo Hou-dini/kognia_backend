@@ -1,12 +1,12 @@
-import binascii
-import datetime
 import uvicorn
 import asyncpg
 import uuid
 import os
 from typing import Optional
 from asyncpg.pool import Pool
-import hashlib
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from fastapi import FastAPI, HTTPException, Body, BackgroundTasks, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -28,18 +28,21 @@ from google.adk.plugins.logging_plugin import LoggingPlugin
 from agents.agent import root_agent
 
 # --- Configuration ---
-
-# If using Supabase, 
+ 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
-SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET", "")
+# SUPABASE_JWT_SECRET is deprecated in favor of JWKS_URL
+# SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET", "")
+JWKS_URL = os.environ.get("JWKS_URL", "")
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
 
 if not DATABASE_URL:
     print("FATAL: DATABASE_URL environment variable not set.")
     exit(1)
-if not SUPABASE_JWT_SECRET:
-    print("FATAL: SUPABASE_JWT_SECRET environment variable not set.")
-    exit(1)
+if not JWKS_URL:
+    print("WARNING: JWKS_URL environment variable not set. JWT verification will fail.")
+# if not SUPABASE_JWT_SECRET:
+#     print("FATAL: SUPABASE_JWT_SECRET environment variable not set.")
+#     exit(1)
 if not GOOGLE_API_KEY:
     print("FATAL: GOOGLE_API_KEY environment variable not set.")
     exit(1)
@@ -138,56 +141,41 @@ app.add_middleware(
 # --- Supabase JWT Authentication Dependency ---
 security = HTTPBearer()
 
+# Initialize JWKS Client
+if JWKS_URL:
+    jwks_client = pyjwt.PyJWKClient(JWKS_URL)
+else:
+    jwks_client = None
+
 async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(security)) -> uuid.UUID:
     """
     Decodes and verifies the Supabase JWT from the Authorization header
-    and returns the user_id (UUID).
+    using JWKS and returns the user_id (UUID).
     """
-    token = credentials.credentials # This is the JWT string
+    token = credentials.credentials
 
-    if not SUPABASE_JWT_SECRET:
-        print("FATAL: SUPABASE_JWT_SECRET environment variable not set or is empty.")
+    if not jwks_client:
+        print("FATAL: JWKS_URL environment variable not set.")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Server configuration error: JWT secret not set."
+            detail="Server configuration error: JWKS URL not set."
         )
-
-    # SUPABASE_JWT_SECRET holds a 64 byte key that results in `Signature verification failed` error when
-    # used to verify the token.  The token was signed with `HS256`, which requires a 32-byte key.
-    # Attempting to verify a 32-byte (HS256) signature with a 64-byte key (derived from Base64 decoding)
-    # caused the `Signature verification failed` error.
-    try:
-        # So we convert it to 32 bytes by:
-        # 1. Encoding it to its UTF-8 byte representation (88 bytes).
-        # 2. Applying `hashlib.sha256()` to this 88-byte string, which produces the required 32-byte (256-bit) digest.
-        jwt_secret_bytes = hashlib.sha256(SUPABASE_JWT_SECRET.encode('utf-8')).digest()
-        print(f"DEBUG: Calculated JWT Secret successfully. Length of bytes: {len(jwt_secret_bytes)}")
-        print(f"DEBUG: Calculated Secret Hex: {binascii.hexlify(jwt_secret_bytes).decode('ascii')}")
-    except Exception as e:
-        print(f"FATAL: Error hashing SUPABASE_JWT_SECRET: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Server configuration error: Invalid JWT secret processing."
-        )
-    
-    print(f"DEBUG: Raw token received (first 60 chars): {token[:60]}...")
-    print(f"DEBUG: Token length: {len(token)}")
-    print(f"DEBUG: Server current UTC time: {datetime.datetime.now(datetime.timezone.utc).isoformat()}")
 
     user_id = None
-
     try:
+        signing_key = jwks_client.get_signing_key_from_jwt(token)
+        
         payload = pyjwt.decode(
             token,
-            key=jwt_secret_bytes,
-            algorithms=["HS256"],
+            key=signing_key.key,
+            algorithms=["RS256"],
             options={
-                "verify_aud": False,
-                "verify_iss": False,
+                "verify_aud": True,
+                "verify_iss": True,
             }
         )
 
-        print("DEBUG: JWT DECODE SUCCESS (PyJWT)!")
+        # print("DEBUG: JWT DECODE SUCCESS (PyJWT via JWKS)!")
         user_id = payload.get("sub")
 
         if not user_id:
@@ -199,7 +187,6 @@ async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depend
             )
         
         parsed_user_id = uuid.UUID(user_id)
-        print(f"DEBUG: Authenticated user_id: {parsed_user_id}")
         return parsed_user_id
         
     except ExpiredSignatureError:
