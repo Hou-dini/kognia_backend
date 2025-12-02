@@ -28,9 +28,11 @@ from google.adk.plugins.logging_plugin import LoggingPlugin
 from agents.agent import root_agent
 
 # --- Configuration ---
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://postgres.nmqruitpbhkjcuucqkgn:Kognia_reloaded@aws-1-eu-north-1.pooler.supabase.com:5432/postgres")
-SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET","o/rAeML82YdqtjbstQR/Ir/O0EGvgwKD5USFWm/gE7DoDOeRUtFic/tBPZRy2xbVxWYHVrsWIuKTaV02m1me0w==")
-GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY","AIzaSyBPQQL3w1UQB7eHNLra_5Xm3N9aV9t37qs")
+
+# If using Supabase, 
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
+SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET", "")
+GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
 
 if not DATABASE_URL:
     print("FATAL: DATABASE_URL environment variable not set.")
@@ -620,4 +622,4 @@ async def get_session_messages(
 # --- Main Entry Point ---
 if __name__ == "__main__":
     print("Starting Uvicorn server in reload mode...")
-    uvicorn.run("main:app", host="127.0.0.1", port=8080, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8080, reload=True)
