@@ -28,8 +28,9 @@ from google.adk.plugins.logging_plugin import LoggingPlugin
 from agents.agent import root_agent
 
 # --- Configuration ---
-DATABASE_URL = os.environ.get("DATABASE_URL", "")
-SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET","")
+DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://postgres.nmqruitpbhkjcuucqkgn:Kognia_reloaded@aws-1-eu-north-1.pooler.supabase.com:5432/postgres")
+SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET","o/rAeML82YdqtjbstQR/Ir/O0EGvgwKD5USFWm/gE7DoDOeRUtFic/tBPZRy2xbVxWYHVrsWIuKTaV02m1me0w==")
+GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY","AIzaSyBPQQL3w1UQB7eHNLra_5Xm3N9aV9t37qs")
 
 if not DATABASE_URL:
     print("FATAL: DATABASE_URL environment variable not set.")
@@ -37,7 +38,9 @@ if not DATABASE_URL:
 if not SUPABASE_JWT_SECRET:
     print("FATAL: SUPABASE_JWT_SECRET environment variable not set.")
     exit(1)
-
+if not GOOGLE_API_KEY:
+    print("FATAL: GOOGLE_API_KEY environment variable not set.")
+    exit(1)
 
 # This will hold our database connection pool
 db_pool: Optional[Pool] = None
@@ -62,7 +65,8 @@ async def lifespan(app: FastAPI):
         db_pool = await asyncpg.create_pool(
             DATABASE_URL,
             min_size=1,
-            max_size=10
+            max_size=10,
+            statement_cache_size=0
         )
         ensure_db_pool()
         async with db_pool.acquire() as connection:
@@ -616,4 +620,4 @@ async def get_session_messages(
 # --- Main Entry Point ---
 if __name__ == "__main__":
     print("Starting Uvicorn server in reload mode...")
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="127.0.0.1", port=8080, reload=True)
