@@ -34,16 +34,15 @@ JWKS_URL = os.environ.get("JWKS_URL", "")
 JWT_AUDIENCE = os.environ.get("JWT_AUDIENCE", "authenticated")
 JWT_ISSUER = os.environ.get("JWT_ISSUER", "")
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
+
 if not JWKS_URL:
     print("WARNING: JWKS_URL environment variable not set. JWT verification will fail.")
-# if not SUPABASE_JWT_SECRET:
-#     print("FATAL: SUPABASE_JWT_SECRET environment variable not set.")
-#     exit(1)
+
 if not GOOGLE_API_KEY:
     print("FATAL: GOOGLE_API_KEY environment variable not set.")
     exit(1)
 
-# This will hold our database connection pool
+# This will hold our database connection pool   
 db_pool: Optional[Pool] = None
 
 

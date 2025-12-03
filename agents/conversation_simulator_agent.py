@@ -80,7 +80,7 @@ unless explicitly requested as a persona within the `simulation_prompt`.**
 
 conversation_simulator_agent = LlmAgent(
     name="conversation_simulator_agent",
-    description="An agent specialized in generating dynamic, authentic, and insight-rich conversations between defined personas, " \
+    description="An agent specialized in generating dynamic, authentic, and insight-rich conversations between defined personas, " 
     "grounded in specific analytical reports.",
     model=model,
     generate_content_config=simulation_agent_config,

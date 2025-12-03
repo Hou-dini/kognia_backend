@@ -6,7 +6,7 @@ Kognia Backend is a FastAPI service that executes agent-led analysis jobs, manag
 
 - Job creation and polling endpoints
 - Session and message management
-- Supabase JWT verification for authentication
+- JWKS-based JWT verification for secure authentication (RS256 public key cryptography)
 - Async DB access via `asyncpg` with pooling
 - Google ADK integration for agent execution, sessions and memory
 - Designed for deployment on Render, Google Cloud Run (Cloud SQL), or similar platforms
@@ -93,6 +93,7 @@ Key Python dependencies (see `requirements.txt`):
 - `psycopg[binary]>=3.2.13`
 - `PyJWT>=2.8.0` (or latest stable)
 - `cryptography` (recommended for JWT support)
+- `python-dotenv` (for loading environment variables from a `.env` file)
 
 Optional: Rust toolchain (only if building some packages from source).
 
@@ -117,7 +118,7 @@ pip install -r requirements.txt
 3. Start the application for local development:
 
 ```powershell
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn main:app --host 0.0.0.0 --port 8080 --reload
 ```
 
 API docs are available at `http://localhost:8000/docs`.
@@ -128,12 +129,22 @@ API docs are available at `http://localhost:8000/docs`.
 
 Environment variables required or commonly used by the project:
 
+### Required
+
 - `DATABASE_URL` — Postgres connection string, e.g. `postgresql://user:pass@host:5432/dbname`
-- `SUPABASE_JWT_SECRET` — Supabase project's JWT secret (may be Base64 encoded; the app will attempt to decode)
-- `GOOGLE_API_KEY` — Api key for accessing Gemini models. 
-- `GOOGLE_GENAI_USE_VERTEXAI` — false
-- `GOOGLE_APPLICATION_CREDENTIALS` — Optional path to Google service account JSON for ADK/GenAI
-- `PYTHON_VERSION` — 3.11.9 
+- `JWKS_URL` — URL to the JWKS (JSON Web Key Set) endpoint for JWT verification. For Supabase, this is typically `https://<your-project-ref>.supabase.co/auth/v1/jwks`
+- `JWT_AUDIENCE` — Expected audience claim in the JWT. For Supabase, this is typically `authenticated`
+- `JWT_ISSUER` — Expected issuer claim in the JWT. For Supabase, this is typically `https://<your-project-ref>.supabase.co/auth/v1`
+- `GOOGLE_API_KEY` — API key for accessing Gemini models
+
+### Optional
+
+- `GOOGLE_GENAI_USE_VERTEXAI` — Set to `false` to use Gemini API directly (default behavior)
+- `GOOGLE_APPLICATION_CREDENTIALS` — Path to Google service account JSON for ADK/GenAI (if using Vertex AI)
+- `PYTHON_VERSION` — `3.11.9` (for deployment platforms)
+
+> [!IMPORTANT]
+> The application uses **JWKS-based JWT verification** with public key cryptography (RS256 algorithm). The deprecated `SUPABASE_JWT_SECRET` shared secret method is no longer supported.
 
 Use your host's secret manager (Render secrets, GCP Secret Manager, etc.) to store these securely.
 
@@ -204,9 +215,9 @@ Consult the Google ADK documentation for authentication, usage quotas, and best 
 
 ## Deployment (Render, Cloud Run)
 
-Render
+**Render**
 
-- Use the provided `render.yaml` or create a new Web Service. Set environment variables (`DATABASE_URL`, `SUPABASE_JWT_SECRET`, `GOOGLE_API_KEY` and optionally `GOOGLE_APPLICATION_CREDENTIALS`).
+- Use the provided `render.yaml` or create a new Web Service. Set environment variables (`DATABASE_URL`, `JWKS_URL`, `JWT_AUDIENCE`, `JWT_ISSUER`, `GOOGLE_API_KEY` and optionally `GOOGLE_APPLICATION_CREDENTIALS`).
 - Build: `pip install -r requirements.txt`.
 - Start: `uvicorn main:app --host 0.0.0.0 --port $PORT`.
 
@@ -230,9 +241,10 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
 
 ## Troubleshooting
 
-- DB connection errors: check `DATABASE_URL`, networking, and that the DB accepts connections.
-- JWT errors: verify `SUPABASE_JWT_SECRET` and token signing algorithm (HS256 expected).
-- Static analyzer warnings about `db_pool` being possibly `None` can be addressed by adding explicit type hints or runtime guards; the runtime uses `ensure_db_pool()` checks.
+- **DB connection errors**: Check `DATABASE_URL`, networking, and that the DB accepts connections.
+- **JWT verification errors**: Verify that `JWKS_URL`, `JWT_AUDIENCE`, and `JWT_ISSUER` are correctly configured. The application expects RS256-signed JWTs. Ensure your JWKS endpoint is accessible and returns valid public keys.
+- **Missing claims errors**: Ensure your JWT tokens include the required `sub` (subject), `aud` (audience), and `iss` (issuer) claims.
+- **Static analyzer warnings**: Warnings about `db_pool` being possibly `None` can be addressed by adding explicit type hints or runtime guards; the runtime uses `ensure_db_pool()` checks.
 
 ---
 
