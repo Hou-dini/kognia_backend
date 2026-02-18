@@ -7,3 +7,6 @@ psycopg[binary]>=3.2.13
 PyJWT>=2.8.0 # Or the latest stable version
 cryptography # Recommended for PyJWT
 python-dotenv
+pytest
+ruff
+httpx
