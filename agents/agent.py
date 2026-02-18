@@ -2,13 +2,12 @@ from google.adk.agents import LlmAgent
 from google.adk.tools.agent_tool import AgentTool
 from google.genai import types
 
-from agents.market_intel_agent import market_intel_agent
-from agents.executive_briefer_agent import executive_briefer_agent
-from agents.strategic_swot_evaluator_agent import strategic_swot_evaluator_agent
 from agents.conversation_simulator_agent import conversation_simulator_agent
+from agents.executive_briefer_agent import executive_briefer_agent
+from agents.market_intel_agent import market_intel_agent
 from agents.strategic_report_architect_agent import strategic_report_architect_agent
+from agents.strategic_swot_evaluator_agent import strategic_swot_evaluator_agent
 from config import model
-
 
 kognia_nexus_config = types.GenerateContentConfig(
     temperature=0.5,
@@ -91,7 +90,7 @@ root_agent = LlmAgent(
     instruction=instruction,
     generate_content_config=kognia_nexus_config,
     tools=[
-         AgentTool(market_intel_agent), 
+         AgentTool(market_intel_agent),
          AgentTool(executive_briefer_agent),
          AgentTool(strategic_swot_evaluator_agent),
          AgentTool(strategic_report_architect_agent),

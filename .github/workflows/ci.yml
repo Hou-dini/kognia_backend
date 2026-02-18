@@ -56,7 +56,7 @@ jobs:
         
     - name: Security Audit with bandit
       run: |
-        bandit -r . -x .venv,tests
+        bandit -c pyproject.toml -r .
         
     - name: Test with pytest
       env:

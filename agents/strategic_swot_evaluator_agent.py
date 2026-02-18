@@ -3,7 +3,6 @@ from google.genai import types
 
 from config import model
 
-
 strategic_swot_evaluator_config = types.GenerateContentConfig(
     temperature=0.4,
     top_p=0.9,
@@ -53,7 +52,7 @@ comprehensive SWOT, state this clearly and explain what additional data would be
 strategic_swot_evaluator_agent = LlmAgent(
     name="strategic_swot_evaluator_agent",
     model=model,
-    description="An agent that specializes in distilling complex market intelligence into a structured, " 
+    description="An agent that specializes in distilling complex market intelligence into a structured, "
     "strategic SWOT (Strengths, Weaknesses, Opportunities, Threats) framework.",
     instruction=instruction,
     generate_content_config=strategic_swot_evaluator_config,

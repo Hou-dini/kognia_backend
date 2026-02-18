@@ -1,29 +1,27 @@
-import uvicorn
-import asyncpg
-import uuid
 import os
-from typing import Optional
+import uuid
+
+import asyncpg
+import uvicorn
 from asyncpg.pool import Pool
 from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import FastAPI, HTTPException, Body, BackgroundTasks, Depends, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
 from contextlib import asynccontextmanager
 
 import jwt as pyjwt
-from jwt import PyJWTError, ExpiredSignatureError, InvalidSignatureError, DecodeError
-
-
-from google.genai import types
-from google.adk.runners import Runner
-from google.adk.memory import InMemoryMemoryService
-from google.adk.sessions import InMemorySessionService 
+from fastapi import BackgroundTasks, Body, Depends, FastAPI, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from google.adk.apps.app import App, EventsCompactionConfig
+from google.adk.memory import InMemoryMemoryService
 from google.adk.plugins.logging_plugin import LoggingPlugin
+from google.adk.runners import Runner
+from google.adk.sessions import InMemorySessionService
+from google.genai import types
+from jwt import DecodeError, ExpiredSignatureError, InvalidSignatureError, PyJWTError
+from pydantic import BaseModel, Field
 
 from agents.agent import root_agent
 
@@ -42,8 +40,8 @@ if not GOOGLE_API_KEY:
     print("FATAL: GOOGLE_API_KEY environment variable not set.")
     exit(1)
 
-# This will hold our database connection pool   
-db_pool: Optional[Pool] = None
+# This will hold our database connection pool
+db_pool: Pool | None = None
 
 
 def ensure_db_pool() -> None:
@@ -53,6 +51,15 @@ def ensure_db_pool() -> None:
     """
     if db_pool is None:
         raise RuntimeError("Database pool is not initialized")
+
+
+async def get_db_conn():
+    """
+    Helper to get a connection from the pool with type narrowing for mypy.
+    """
+    ensure_db_pool()
+    assert db_pool is not None
+    return db_pool.acquire()
 
 # --- Lifespan Management ---
 @asynccontextmanager
@@ -86,8 +93,8 @@ async def lifespan(app: FastAPI):
         # because there were errors involving ADK creating its sessions table in Supabase
         # --- Using InMemorySessionService instead ---
         memory_service = InMemoryMemoryService()
-        session_service = InMemorySessionService() 
-        
+        session_service = InMemorySessionService()
+
         app_with_compaction = App(
             name="agents",
             root_agent=root_agent,
@@ -102,7 +109,7 @@ async def lifespan(app: FastAPI):
             memory_service=memory_service,
             session_service=session_service
         )
-        print("ADK Agent Runner initialized with InMemorySessionService.") 
+        print("ADK Agent Runner initialized with InMemorySessionService.")
         app.state.runner = runner_instance
     except Exception as e:
         print(f"FATAL: Could not initialize ADK Agent Runner: {e}")
@@ -137,12 +144,11 @@ app.add_middleware(
 security = HTTPBearer()
 
 # Initialize JWKS Client
+jwks_client: pyjwt.PyJWKClient | None = None
 if JWKS_URL:
     jwks_client = pyjwt.PyJWKClient(JWKS_URL)
-else:
-    jwks_client = None
 
-async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(security)) -> uuid.UUID:
+async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(security)) -> uuid.UUID:  # noqa: B008
     """
     Decodes and verifies the Supabase JWT from the Authorization header
     using JWKS and returns the user_id (UUID).
@@ -159,7 +165,7 @@ async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depend
     user_id = None
     try:
         signing_key = jwks_client.get_signing_key_from_jwt(token)
-        
+
         payload = pyjwt.decode(
             token,
             key=signing_key.key,
@@ -182,52 +188,52 @@ async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depend
                 detail="Could not validate credentials: Missing user ID in token.",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        
+
         parsed_user_id = uuid.UUID(user_id)
         return parsed_user_id
-        
-    except ExpiredSignatureError:
+
+    except ExpiredSignatureError as e:
         print("DEBUG: Token has expired (PyJWT).")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has expired",
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from e
     except InvalidSignatureError as e:
         print(f"DEBUG: JWT signature verification failed (PyJWT): {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Could not validate credentials: Invalid signature. ({e})",
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from e
     except DecodeError as e:
         print(f"DEBUG: JWT decode error (PyJWT): {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Could not validate credentials: Invalid token format or algorithm. ({e})",
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from e
     except PyJWTError as e:
         print(f"DEBUG: Generic PyJWT error: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Could not validate credentials: {e}",
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from e
     except ValueError as e:
         print(f"DEBUG: Invalid UUID format for user_id in token: {user_id}. Error: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials: Invalid user ID format in token.",
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from e
     except Exception as e:
         print(f"DEBUG: Unexpected error during JWT authentication: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error during authentication.",
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from e
 
 
 # --- Pydantic Models ---
@@ -270,7 +276,7 @@ async def run_agent_task(job_id: str, prompt: str, user_id: uuid.UUID, session_i
         print(f"[Job {job_id}]: FATAL- Runner not initialized.")
         await update_job_status(job_id, "failed")
         return
-    
+
     try:
         await update_job_status(job_id, "processing")
 
@@ -289,6 +295,7 @@ async def run_agent_task(job_id: str, prompt: str, user_id: uuid.UUID, session_i
 
         # Log user's message to the DB
         ensure_db_pool()
+        assert db_pool is not None
         async with db_pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO messages (session_id, user_id, role, content, created_at) VALUES($1, $2, $3, $4, NOW())",
@@ -301,7 +308,7 @@ async def run_agent_task(job_id: str, prompt: str, user_id: uuid.UUID, session_i
             print(f"[Job {job_id}]: FATAL- No report content received from agent.")
             await update_job_status(job_id, "failed")
             return
-        
+
         print(f"[Job {job_id}]: Archiving session to Long-Term Memory...")
         try:
             # InMemorySessionService does not persist, but InMemoryMemoryService will still work
@@ -319,6 +326,7 @@ async def run_agent_task(job_id: str, prompt: str, user_id: uuid.UUID, session_i
 
         # Log agent's report to the DB
         ensure_db_pool()
+        assert db_pool is not None
         async with db_pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO messages (session_id, user_id, role, content, created_at) VALUES($1, $2, $3, $4, NOW())",
@@ -327,6 +335,7 @@ async def run_agent_task(job_id: str, prompt: str, user_id: uuid.UUID, session_i
 
         # 4. Save Report and Complete Job
         ensure_db_pool()
+        assert db_pool is not None
         async with db_pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO reports (job_id, user_id, content) VALUES($1, $2, $3)",
@@ -358,7 +367,7 @@ async def get_agent_response(runner, prompt: str, user_id: str, session_id: str)
     ):
         if event.is_final_response and event.content and event.content.parts:
             final_text = event.content.parts[0].text
-            print(f"[Agent] Final response received.")
+            print("[Agent] Final response received.")
 
     return final_text
 
@@ -368,6 +377,7 @@ async def update_job_status(job_id: str, status: str):
     """
     try:
         ensure_db_pool()
+        assert db_pool is not None
         async with db_pool.acquire() as conn:
             await conn.execute(
                 "UPDATE jobs SET status = $1::public.job_status_enum, updated_at = NOW() WHERE id = $2",
@@ -408,8 +418,8 @@ async def get_or_create_user_profile(conn, user_id: uuid.UUID):
 @app.post("/api/v1/jobs", response_model=JobStatus)
 async def create_job(
     background_tasks: BackgroundTasks,
-    job_request: JobRequest = Body(...),
-    current_user_id: uuid.UUID = Depends(get_current_user_id)
+    job_request: JobRequest = Body(...),  # noqa: B008
+    current_user_id: uuid.UUID = Depends(get_current_user_id)  # noqa: B008
 ):
     """
     Create a new analysis job.
@@ -419,14 +429,15 @@ async def create_job(
     authenticated_user_id = current_user_id
     client_session_id = job_request.session_id
     print(f"Received new job request from {authenticated_user_id} with prompt: {job_request.prompt}")
-    
+
     if db_pool is None:
         raise HTTPException(
-            status_code=503, 
+            status_code=503,
             detail="Database connection is not available. Check server logs."
         )
 
     try:
+        assert db_pool is not None
         async with db_pool.acquire() as conn:
             # 1a. Ensure user_profile exists for RLS
             await get_or_create_user_profile(conn, authenticated_user_id)
@@ -445,7 +456,7 @@ async def create_job(
                 )
                 print(f"Session {client_session_id} created in DB for user {authenticated_user_id}.")
             elif existing_session_owner != authenticated_user_id:
-                 raise HTTPException(
+                raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Forbidden: Session ID belongs to another user."
                 )
@@ -455,59 +466,60 @@ async def create_job(
                     "UPDATE sessions SET title = $1, updated_at = NOW() WHERE id = $2",
                     job_request.prompt[:50], uuid.UUID(client_session_id)
                 )
-            
+
             # 2. Insert the new job into the 'jobs' table
             new_job_id = await conn.fetchval(
                 "INSERT INTO jobs (user_id, session_id, prompt, status, created_at, updated_at) VALUES ($1, $2, $3, $4::public.job_status_enum, NOW(), NOW()) RETURNING id",
                 authenticated_user_id, uuid.UUID(client_session_id), job_request.prompt, 'pending'
             )
-            
+
             if not new_job_id:
                 raise HTTPException(status_code=500, detail="Failed to create job in database.")
 
             # 3. Add the REAL agent task to the background queue
             background_tasks.add_task(
-                run_agent_task, str(new_job_id), job_request.prompt, 
+                run_agent_task, str(new_job_id), job_request.prompt,
                 authenticated_user_id,
                 client_session_id,
             )
-            
+
             print(f"Job {new_job_id} created and background task scheduled.")
-            
+
             return JobStatus(job_id=str(new_job_id), status="pending")
-    
+
     except Exception as e:
         print(f"Error creating job: {e}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {e}") from e
 
 
 @app.get("/api/v1/jobs/{job_id}", response_model=ReportResponse)
-async def get_job_status(job_id: str, current_user_id: uuid.UUID = Depends(get_current_user_id)):
+async def get_job_status(job_id: str, current_user_id: uuid.UUID = Depends(get_current_user_id)):  # noqa: B008
     """
     Get the status of a job.
     The frontend will poll this endpoint.
     """
     print(f"Polling for job ID: {job_id}")
-    
+
     if db_pool is None:
         raise HTTPException(
-            status_code=503, 
+            status_code=503,
             detail="Database connection is not available."
         )
-        
+
     try:
         job_uuid = uuid.UUID(job_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid job ID format. Must be a UUID.")
+        raise HTTPException(status_code=400, detail="Invalid job ID format. Must be a UUID.") from None
 
     try:
         ensure_db_pool()
+        assert db_pool is not None
         async with db_pool.acquire() as conn:
             job_record = await conn.fetchrow(
                 "SELECT status FROM jobs WHERE id = $1 AND user_id = $2",
                 job_uuid, current_user_id
             )
-            
+
             if not job_record:
                 raise HTTPException(status_code=404, detail="Job not found or not accessible.")
 
@@ -519,17 +531,17 @@ async def get_job_status(job_id: str, current_user_id: uuid.UUID = Depends(get_c
                     job_uuid, current_user_id
                 )
                 return ReportResponse(job_id=job_id, status="completed", report=report_content)
-            
+
             else:
                 return ReportResponse(job_id=job_id, status=status_val, report=None)
 
     except Exception as e:
         print(f"Error fetching job status: {e}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
-    
+        raise HTTPException(status_code=500, detail=f"Internal server error: {e}") from e
+
 
 @app.get("/api/v1/sessions", response_model=list[SessionSummary])
-async def get_all_sessions(current_user_id: uuid.UUID = Depends(get_current_user_id)):
+async def get_all_sessions(current_user_id: uuid.UUID = Depends(get_current_user_id)):  # noqa: B008
     """
     Retrieves all chat sessions for the authenticated user.
     """
@@ -543,6 +555,7 @@ async def get_all_sessions(current_user_id: uuid.UUID = Depends(get_current_user
         authenticated_user_id = current_user_id
 
         ensure_db_pool()
+        assert db_pool is not None
         async with db_pool.acquire() as conn:
             sessions = await conn.fetch(
                 "SELECT id, title, updated_at FROM sessions WHERE user_id = $1 ORDER BY updated_at DESC",
@@ -557,12 +570,12 @@ async def get_all_sessions(current_user_id: uuid.UUID = Depends(get_current_user
             ]
     except Exception as e:
         print(f"Error fetching all sessions: {e}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
-    
+        raise HTTPException(status_code=500, detail=f"Internal server error: {e}") from e
+
 @app.get("/api/v1/sessions/{session_id}/messages", response_model=list[MessageResponseItem])
 async def get_session_messages(
     session_id: str,
-    current_user_id: uuid.UUID = Depends(get_current_user_id)
+    current_user_id: uuid.UUID = Depends(get_current_user_id)  # noqa: B008
 ):
     """
     Retrieves all messages for a specific chat session, verifying user ownership.
@@ -578,6 +591,7 @@ async def get_session_messages(
         authenticated_user_id = current_user_id
 
         ensure_db_pool()
+        assert db_pool is not None
         async with db_pool.acquire() as conn:
             session_owner_id = await conn.fetchval(
                 "SELECT user_id FROM sessions WHERE id = $1",
@@ -597,14 +611,14 @@ async def get_session_messages(
                     created_at=m['created_at'].isoformat()
                 ) for m in messages
             ]
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid session ID format. Must be a UUID.")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail="Invalid session ID format. Must be a UUID.") from e
     except Exception as e:
         print(f"Error fetching messages for session {session_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {e}") from e
 
 
 # --- Main Entry Point ---
 if __name__ == "__main__":
     print("Starting Uvicorn server in reload mode...")
-    uvicorn.run("main:app", host="0.0.0.0", port=8080, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8080, reload=True)  # nosec B104

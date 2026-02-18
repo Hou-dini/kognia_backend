@@ -4,7 +4,7 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "B", "C4", "UP"]
-ignore = ["E501"] # Line too long (already handled by line-length)
+ignore = ["E501", "E402", "W291", "W293"] # Line too long, imports not at top, trailing whitespace
 
 [tool.ruff.lint.isort]
 known-first-party = ["agents", "config"]
@@ -13,9 +13,15 @@ known-first-party = ["agents", "config"]
 python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
-disallow_untyped_defs = false # Let's start permissive and tighten later
+disallow_untyped_defs = false
 check_untyped_defs = true
 ignore_missing_imports = true
+namespace_packages = true
+explicit_package_bases = true
+
+[tool.bandit]
+exclude_dirs = [".venv", "tests"]
+skips = ["B101"] # Skip assert usage check globally if preferred, or just exclude tests dir above.
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

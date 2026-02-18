@@ -5,7 +5,6 @@ from google.genai import types
 
 from config import model
 
-
 research_agent_generate_content_config = types.GenerateContentConfig(
     temperature=0.2,
     top_p=0.9,

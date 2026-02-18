@@ -4,6 +4,7 @@ from unittest import mock
 import pytest
 from fastapi.testclient import TestClient
 
+
 @pytest.fixture(scope="session", autouse=True)
 def test_settings():
     """
