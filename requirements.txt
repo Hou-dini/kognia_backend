@@ -10,3 +10,6 @@ python-dotenv
 pytest
 ruff
 httpx
+mypy
+bandit
+pre-commit
