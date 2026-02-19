@@ -99,7 +99,7 @@ async def lifespan(app: FastAPI):
             name="agents",
             root_agent=root_agent,
             events_compaction_config=EventsCompactionConfig(
-                compaction_interval=5,
+                compaction_interval=10,
                 overlap_size=2,
             ),
             plugins=[LoggingPlugin()]
@@ -134,7 +134,7 @@ app = FastAPI(
 # --- CORS ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"], # Update this to a specific origins for security later
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -148,7 +148,7 @@ jwks_client: pyjwt.PyJWKClient | None = None
 if JWKS_URL:
     jwks_client = pyjwt.PyJWKClient(JWKS_URL)
 
-async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(security)) -> uuid.UUID:  # noqa: B008
+async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(security)) -> uuid.UUID:  
     """
     Decodes and verifies the Supabase JWT from the Authorization header
     using JWKS and returns the user_id (UUID).
