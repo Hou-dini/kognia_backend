@@ -48,7 +48,7 @@ jobs:
         
     - name: Lint with Ruff
       run: |
-        ruff check . --show-source
+        ruff check --show-files .
         
     - name: Static Type Checking with mypy
       run: |
