@@ -4,10 +4,9 @@ from google.genai import types
 from config import specialist_model
 
 simulation_agent_config = types.GenerateContentConfig(
-    temperature=0.6, # This promotes more focused, deterministic, and predictable output while making room for some creativity.
-    top_p=0.9, # Allows for enough lexical diversity to simulate natural human speech and varied conversational turns, without veering into completely improbable or irrelevant territory.
-    top_k=50 # This range ensures that the model considers a reasonable number of the most likely next words, preventing it from getting stuck on very few options
-    )
+    temperature=1.0,
+    thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.HIGH)
+)
 
 
 

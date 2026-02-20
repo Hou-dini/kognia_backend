@@ -1,13 +1,8 @@
 from google.adk.agents import LlmAgent
-from google.genai.types import GenerateContentConfig
 
-from config import specialist_model
+from config import gemini_3_config, specialist_model
 
-summarizer_agent_generate_content_config = GenerateContentConfig(
-    temperature=0.3,
-    top_p=0.9,
-    top_k=40,
-)
+summarizer_agent_generate_content_config = gemini_3_config
 
 
 instruction = """

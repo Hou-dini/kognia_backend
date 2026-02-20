@@ -1,14 +1,9 @@
 from google.adk.agents import LlmAgent
-from google.genai import types
 
-from config import specialist_model
+from config import gemini_3_config, specialist_model
 
-strategic_swot_evaluator_config = types.GenerateContentConfig(
+strategic_swot_evaluator_config = gemini_3_config
 
-    temperature=0.4,
-    top_p=0.9,
-    top_k=40
-)
 
 
 instruction = """

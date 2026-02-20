@@ -1,16 +1,10 @@
 from google.adk.agents import LlmAgent
 from google.adk.tools.google_search_tool import google_search
 from google.adk.tools.url_context_tool import url_context
-from google.genai import types
 
-from config import specialist_model
+from config import gemini_3_config, specialist_model
 
-research_agent_generate_content_config = types.GenerateContentConfig(
-
-    temperature=0.2,
-    top_p=0.9,
-    top_k=40,
-)
+research_agent_generate_content_config = gemini_3_config
 
 instruction = """
 **You are a MarketIntel Analyst, a highly specialized agent of Kognia AI. 

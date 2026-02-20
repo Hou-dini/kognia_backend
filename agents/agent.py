@@ -10,9 +10,8 @@ from agents.strategic_swot_evaluator_agent import strategic_swot_evaluator_agent
 from config import nexus_model
 
 kognia_nexus_config = types.GenerateContentConfig(
-    temperature=0.5,
-    top_p=0.9,
-    top_k=40
+    temperature=1.0,
+    thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.HIGH)
 )
 
 instruction = """

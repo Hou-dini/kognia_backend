@@ -20,7 +20,13 @@ specialist_model = Gemini(
     retry_options=retry_config
 )
 
-# Legacy model reference for agents not explicitly updated yet
+# Configuration following Gemini 3 guidelines (temperature 1.0, high thinking)
+gemini_3_config = types.GenerateContentConfig(
+    temperature=1.0,
+    thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.HIGH)
+)
+
+# Legacy model reference
 model = specialist_model
 
 
