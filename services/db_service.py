@@ -3,10 +3,9 @@ import os
 import asyncpg
 from asyncpg.pool import Pool
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "")
-
-# This will hold our database connection pool   
+# This will hold our database connection pool
 db_pool: Pool | None = None
+
 
 def ensure_db_pool() -> None:
     """
@@ -15,21 +14,25 @@ def ensure_db_pool() -> None:
     if db_pool is None:
         raise RuntimeError("Database pool is not initialized")
 
+
 async def init_db_pool():
     global db_pool
+    database_url = os.environ.get("DATABASE_URL", "")
     db_pool = await asyncpg.create_pool(
-        DATABASE_URL,
+        database_url,
         min_size=1,
         max_size=10,
         statement_cache_size=0
     )
     return db_pool
 
+
 async def close_db_pool():
     global db_pool
     if db_pool:
         await db_pool.close()
         db_pool = None
+
 
 async def get_or_create_user_profile(conn, user_id):
     """
