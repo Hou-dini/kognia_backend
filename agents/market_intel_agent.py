@@ -3,9 +3,10 @@ from google.adk.tools.google_search_tool import google_search
 from google.adk.tools.url_context_tool import url_context
 from google.genai import types
 
-from config import model
+from config import specialist_model
 
 research_agent_generate_content_config = types.GenerateContentConfig(
+
     temperature=0.2,
     top_p=0.9,
     top_k=40,
@@ -93,7 +94,7 @@ or entities over time and across regions, enabling data-driven trend projections
 market_intel_agent = LlmAgent(
     name="market_intel_agent",
     description="An agent that generates meticulously researched, objective, and actionable market and competitor intelligence reports.",
-    model=model,
+    model=specialist_model,
     instruction=instruction,
     generate_content_config=research_agent_generate_content_config,
     tools=[google_search, url_context],

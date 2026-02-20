@@ -1,7 +1,7 @@
 from google.adk.agents import LlmAgent
 from google.genai import types
 
-from config import model
+from config import specialist_model
 
 simulation_agent_config = types.GenerateContentConfig(
     temperature=0.6, # This promotes more focused, deterministic, and predictable output while making room for some creativity.
@@ -80,7 +80,7 @@ conversation_simulator_agent = LlmAgent(
     name="conversation_simulator_agent",
     description="An agent specialized in generating dynamic, authentic, and insight-rich conversations between defined personas, "
     "grounded in specific analytical reports.",
-    model=model,
+    model=specialist_model,
     generate_content_config=simulation_agent_config,
     output_key="simulated_conversation"
 

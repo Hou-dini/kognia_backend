@@ -7,7 +7,7 @@ from agents.executive_briefer_agent import executive_briefer_agent
 from agents.market_intel_agent import market_intel_agent
 from agents.strategic_report_architect_agent import strategic_report_architect_agent
 from agents.strategic_swot_evaluator_agent import strategic_swot_evaluator_agent
-from config import model
+from config import nexus_model
 
 kognia_nexus_config = types.GenerateContentConfig(
     temperature=0.5,
@@ -86,7 +86,7 @@ and precisely aligns with the user's articulated intent. Emojis should complemen
 root_agent = LlmAgent(
     name="kognia_nexus_agent",
     description="The central intelligence orchestrator of the Kognia AI platform.",
-    model=model,
+    model=nexus_model,
     instruction=instruction,
     generate_content_config=kognia_nexus_config,
     tools=[

@@ -10,10 +10,18 @@ retry_config = types.HttpRetryOptions(
 )
 
 
-model = Gemini(
-    model="gemini-2.5-flash",
+nexus_model = Gemini(
+    model="gemini-2.5-pro",
     retry_options=retry_config
 )
+
+specialist_model = Gemini(
+    model="gemini-3.0-flash-preview",
+    retry_options=retry_config
+)
+
+# Legacy model reference for agents not explicitly updated yet
+model = specialist_model
 
 
 # You can also keep your model definition here if you prefer Python-based model instantiation,

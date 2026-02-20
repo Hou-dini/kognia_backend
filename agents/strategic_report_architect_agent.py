@@ -1,7 +1,7 @@
 from google.adk.agents import LlmAgent
 from google.genai import types
 
-from config import model
+from config import specialist_model
 
 strategic_report_architect_config = types.GenerateContentConfig(
     temperature=0.4,
@@ -70,7 +70,7 @@ strategic_report_architect_agent = LlmAgent(
     name="strategic_report_architect_agent",
     description="An agent specialized in synthesizing disparate analytical outputs into a cohesive, comprehensive, "
     "and presentation-ready strategic report.",
-    model=model,
+    model=specialist_model,
     instruction=instruction,
     generate_content_config=strategic_report_architect_config,
     output_key="strategic_report"

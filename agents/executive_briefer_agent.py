@@ -1,7 +1,7 @@
 from google.adk.agents import LlmAgent
 from google.genai.types import GenerateContentConfig
 
-from config import model
+from config import specialist_model
 
 summarizer_agent_generate_content_config = GenerateContentConfig(
     temperature=0.3,
@@ -59,7 +59,7 @@ state this politely and explain why a more detailed report is needed first.
 
 executive_briefer_agent = LlmAgent(
     name="executive_briefer_agent",
-    model=model,
+    model=specialist_model,
     description="An agent specialized in distilling voluminous and complex information into highly digestible, "
     "executive-level summaries, specifically optimized for rapid comprehension by strategic decision-makers.",
     instruction=instruction,
