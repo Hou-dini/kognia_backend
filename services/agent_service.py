@@ -2,7 +2,7 @@ import uuid
 
 from google.genai import types
 
-from services.db_service import db_pool, ensure_db_pool
+from services import db_service
 
 
 async def update_job_status(job_id: str, status: str):
@@ -10,9 +10,9 @@ async def update_job_status(job_id: str, status: str):
     Updates the status of a job in the database.
     """
     try:
-        ensure_db_pool()
-        assert db_pool is not None
-        async with db_pool.acquire() as conn:
+        db_service.ensure_db_pool()
+        assert db_service.db_pool is not None
+        async with db_service.db_pool.acquire() as conn:
             await conn.execute(
                 "UPDATE jobs SET status = $1::public.job_status_enum, updated_at = NOW() WHERE id = $2",
                 status,
@@ -68,9 +68,9 @@ async def run_agent_task(runner, job_id: str, prompt: str, user_id: uuid.UUID, s
 
 
         # Log user's message to the DB
-        ensure_db_pool()
-        assert db_pool is not None
-        async with db_pool.acquire() as conn:
+        db_service.ensure_db_pool()
+        assert db_service.db_pool is not None
+        async with db_service.db_pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO messages (session_id, user_id, role, content, created_at) VALUES($1, $2, $3, $4, NOW())",
                 uuid.UUID(session_id), user_id, "user", prompt
@@ -97,14 +97,14 @@ async def run_agent_task(runner, job_id: str, prompt: str, user_id: uuid.UUID, s
             print(f"[Job {job_id}]: WARNING- Failed to save memory: {mem_e}")
 
         # Log agent's report to the DB
-        async with db_pool.acquire() as conn:
+        async with db_service.db_pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO messages (session_id, user_id, role, content, created_at) VALUES($1, $2, $3, $4, NOW())",
                 uuid.UUID(session_id), user_id, "agent", report_content
             )
 
         # 4. Save Report and Complete Job
-        async with db_pool.acquire() as conn:
+        async with db_service.db_pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO reports (job_id, user_id, content) VALUES($1, $2, $3)",
                 uuid.UUID(job_id), user_id, report_content

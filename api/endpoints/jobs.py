@@ -4,8 +4,8 @@ from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Re
 
 from api.dependencies import get_current_user_id
 from schemas.job_schemas import JobRequest, JobStatus, ReportResponse
+from services import db_service
 from services.agent_service import run_agent_task
-from services.db_service import db_pool, get_or_create_user_profile
 
 router = APIRouter()
 
@@ -22,15 +22,15 @@ async def create_job(
     authenticated_user_id = current_user_id
     client_session_id = job_request.session_id
     
-    if db_pool is None:
+    if db_service.db_pool is None:
         raise HTTPException(
             status_code=503, 
             detail="Database connection is not available."
         )
 
     try:
-        async with db_pool.acquire() as conn:
-            await get_or_create_user_profile(conn, authenticated_user_id)
+        async with db_service.db_pool.acquire() as conn:
+            await db_service.get_or_create_user_profile(conn, authenticated_user_id)
 
             existing_session_owner = await conn.fetchval(
                 "SELECT user_id FROM sessions WHERE id = $1",
@@ -83,7 +83,7 @@ async def get_job_status(job_id: str, current_user_id: uuid.UUID = Depends(get_c
     """
     Get the status of a job.
     """
-    if db_pool is None:
+    if db_service.db_pool is None:
         raise HTTPException(status_code=503, detail="Database connection is not available.")
         
     try:
@@ -92,7 +92,7 @@ async def get_job_status(job_id: str, current_user_id: uuid.UUID = Depends(get_c
         raise HTTPException(status_code=400, detail="Invalid job ID format. Must be a UUID.") from None
 
     try:
-        async with db_pool.acquire() as conn:
+        async with db_service.db_pool.acquire() as conn:
             job_record = await conn.fetchrow(
                 "SELECT status FROM jobs WHERE id = $1 AND user_id = $2",
                 job_uuid, current_user_id

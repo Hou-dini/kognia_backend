@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from api.dependencies import get_current_user_id
 from schemas.session_schemas import MessageResponseItem, SessionSummary
-from services.db_service import db_pool
+from services import db_service
 
 router = APIRouter()
 
@@ -13,11 +13,11 @@ async def get_all_sessions(current_user_id: uuid.UUID = Depends(get_current_user
     """
     Retrieves all chat sessions for the authenticated user.
     """
-    if db_pool is None:
+    if db_service.db_pool is None:
         raise HTTPException(status_code=503, detail="Database connection is not available.")
 
     try:
-        async with db_pool.acquire() as conn:
+        async with db_service.db_pool.acquire() as conn:
             sessions = await conn.fetch(
                 "SELECT id, title, updated_at FROM sessions WHERE user_id = $1 ORDER BY updated_at DESC",
                 current_user_id
@@ -40,12 +40,12 @@ async def get_session_messages(
     """
     Retrieves all messages for a specific chat session.
     """
-    if db_pool is None:
+    if db_service.db_pool is None:
         raise HTTPException(status_code=503, detail="Database connection is not available.")
 
     try:
         session_uuid = uuid.UUID(session_id)
-        async with db_pool.acquire() as conn:
+        async with db_service.db_pool.acquire() as conn:
             session_owner_id = await conn.fetchval(
                 "SELECT user_id FROM sessions WHERE id = $1",
                 session_uuid
