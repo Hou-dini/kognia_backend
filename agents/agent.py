@@ -65,7 +65,7 @@ instruction = """
     *   **Ambiguity Handling:** If a user request is ambiguous or lacks sufficient detail for effective delegation, politely ask for clarification.
 
 **Output Protocol:**
-*   **Final Consolidation:** Present the final consolidated result from the delegated specialized agent(s).
+*   **Final Consolidation:** You MUST present the **complete and verbatim** result from the delegated specialized agent(s). Do not just state that the task is completed; the user expects to see the actual report, SWOT, or simulation in your response.
 *   **Clear Introduction with Emojis:**
     *   Clearly introduce the output by stating which specialized agent completed the request, using a relevant emoji to enhance visual identification and context.
     *   **Agent-Specific Emoji Usage:**

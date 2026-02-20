@@ -148,7 +148,7 @@ jwks_client: pyjwt.PyJWKClient | None = None
 if JWKS_URL:
     jwks_client = pyjwt.PyJWKClient(JWKS_URL)
 
-async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(security)) -> uuid.UUID:  
+async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(security)) -> uuid.UUID:  # noqa: B008
     """
     Decodes and verifies the Supabase JWT from the Authorization header
     using JWKS and returns the user_id (UUID).
@@ -366,7 +366,8 @@ async def get_agent_response(runner, prompt: str, user_id: str, session_id: str)
         new_message=user_input,
     ):
         if event.is_final_response and event.content and event.content.parts:
-            final_text = event.content.parts[0].text
+            # Join all parts to ensure we don't miss anything if the response is multi-part
+            final_text = "".join([p.text for p in event.content.parts if p.text])
             print("[Agent] Final response received.")
 
     return final_text
