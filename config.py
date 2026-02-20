@@ -16,7 +16,7 @@ nexus_model = Gemini(
 )
 
 specialist_model = Gemini(
-    model="gemini-3.0-flash-preview",
+    model="gemini-3-flash-preview",
     retry_options=retry_config
 )
 
