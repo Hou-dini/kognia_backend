@@ -1,8 +1,7 @@
 from google.adk.agents import LlmAgent
 
-from config import gemini_3_config, specialist_model
+from config import specialist_model
 
-summarizer_agent_generate_content_config = gemini_3_config
 
 
 instruction = """
@@ -58,6 +57,5 @@ executive_briefer_agent = LlmAgent(
     description="An agent specialized in distilling voluminous and complex information into highly digestible, "
     "executive-level summaries, specifically optimized for rapid comprehension by strategic decision-makers.",
     instruction=instruction,
-    generate_content_config=summarizer_agent_generate_content_config,
     output_key="executive_summary",
 )

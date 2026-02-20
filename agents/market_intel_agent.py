@@ -2,9 +2,7 @@ from google.adk.agents import LlmAgent
 from google.adk.tools.google_search_tool import google_search
 from google.adk.tools.url_context_tool import url_context
 
-from config import gemini_3_config, specialist_model
-
-research_agent_generate_content_config = gemini_3_config
+from config import specialist_model
 
 instruction = """
 **You are a MarketIntel Analyst, a highly specialized agent of Kognia AI. 
@@ -90,7 +88,6 @@ market_intel_agent = LlmAgent(
     description="An agent that generates meticulously researched, objective, and actionable market and competitor intelligence reports.",
     model=specialist_model,
     instruction=instruction,
-    generate_content_config=research_agent_generate_content_config,
     tools=[google_search, url_context],
     output_key="research_findings",
 )

@@ -26,8 +26,6 @@ gemini_3_config = types.GenerateContentConfig(
     thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.HIGH)
 )
 
-# Legacy model reference
-model = specialist_model
 
 
 # You can also keep your model definition here if you prefer Python-based model instantiation,

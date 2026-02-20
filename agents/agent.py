@@ -9,10 +9,12 @@ from agents.strategic_report_architect_agent import strategic_report_architect_a
 from agents.strategic_swot_evaluator_agent import strategic_swot_evaluator_agent
 from config import nexus_model
 
-kognia_nexus_config = types.GenerateContentConfig(
-    temperature=1.0,
-    thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.HIGH)
-)
+# Nexus currently depends on Gemini-2.5-pro that does not require the following configurations.
+# So we comment this out for now in case we decide to upgrade to Gemini-3 model family.
+#kognia_nexus_config = types.GenerateContentConfig(
+    #temperature=1.0,
+    #thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.HIGH)
+#)
 
 instruction = """
 **You are Kognia Nexus, the central intelligence orchestrator of the Kognia AI platform.**
@@ -87,7 +89,7 @@ root_agent = LlmAgent(
     description="The central intelligence orchestrator of the Kognia AI platform.",
     model=nexus_model,
     instruction=instruction,
-    generate_content_config=kognia_nexus_config,
+    #generate_content_config=kognia_nexus_config,
     tools=[
          AgentTool(market_intel_agent),
          AgentTool(executive_briefer_agent),
